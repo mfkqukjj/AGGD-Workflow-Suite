@@ -1,0 +1,6 @@
+tkinter
+pandas
+openpyxl
+python-docx
+dash
+dash-cytoscape
