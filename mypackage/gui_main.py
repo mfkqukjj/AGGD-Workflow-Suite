@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 from .dataconcat import DataConcatTool
 from .afileperpeople import BatchGenerator
 from .sql_quick import SqlQuick
+from .hello import HelloWorld
 
 class MainApplication:
     def __init__(self, root):
@@ -49,9 +50,9 @@ class MainApplication:
         frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         
         buttons = [
-            ("正在建设", lambda: self.show_feature("正在建设")),
-            ("正在建设", lambda: self.show_feature("正在建设")),
-            ("正在建设", lambda: self.show_feature("正在建设"))
+            ("简单示例", self.open_hello),
+            ("简单示例", self.open_hello),
+            ("简单示例", self.open_hello)  # 简单示例展示
         ]
         self.add_buttons_to_frame(frame, buttons)
 
@@ -121,7 +122,14 @@ class MainApplication:
         """打开一人一档生成工具"""
         BatchGenerator(self.root) 
 
-            
+    def open_hello(self):
+        """打开简单示例"""
+        try:
+            HelloWorld(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开简单示例：{str(e)}")
+
+
 """
 if __name__ == "__main__":
     root = tk.Tk()
