@@ -59,3 +59,27 @@ python main.py
 ## 📮 联系方式
 - GitHub Issues: [提交问题](https://github.com/mfkqukjj/AGGD-Workflow-Suite/issues)
 - Mail me: mfkqukjj@foxmail.com
+
+
+----
+
+## 📝 更新日志
+
+
+
+#### 2025年06月03日
+新增：批量SQL
+- 新增SQL语句的格式化
+- 经纬度计算语句
+- 新增批量CASE WHEN功能，支持将Excel数组型数据一键复制后，以全等或正则（模糊）匹配形式进行语句转换
+
+
+#### 2025年05月29日
+
+创建该项目
+新增功能：
+- 多表合并
+- 批量SQL
+  - 批量查询
+  - 批量录入
+- 一人一档
