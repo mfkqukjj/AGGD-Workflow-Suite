@@ -175,3 +175,7 @@ cython_debug/
 
 # 坚果云同步文件
 .DS_Store
+
+# 临时项目特定目录
+.github/
+Else Project/

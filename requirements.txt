@@ -1,6 +1,22 @@
-tkinter
-pandas
-openpyxl
-python-docx
-dash
-dash-cytoscape
+# AGGD-Workflow-Suite Dependencies
+# Python version >= 3.8 recommended
+
+
+# 数据处理
+pandas>=2.0.0  # 添加版本号
+numpy  # pandas的依赖，建议显式声明
+
+# 文件处理
+openpyxl>=3.1.0  # Excel文件处理
+python-docx>=0.8.11  # Word文档处理
+requests>=2.31.0  # HTTP请求处理
+
+# 可视化
+dash>=2.9.0  # 资金流向可视化
+dash-cytoscape>=0.3.0  # 关系图展示
+
+# SQL处理
+sqlparse>=0.4.4  # SQL格式化
+
+# 操作系统相关
+python-dotenv  # 环境变量管理（可选）
