@@ -4,6 +4,7 @@ from .dataconcat import DataConcatTool
 from .afileperpeople import BatchGenerator
 from .sql_quick import SqlQuick
 from .hello import HelloWorld
+from .table_split import TableSplitter  # 新增导入
 
 class MainApplication:
     def __init__(self, root):
@@ -16,9 +17,9 @@ class MainApplication:
         self.main_frame.pack(fill=tk.BOTH, expand=True)
         
         # 创建四大功能组
+        self.create_file_group()
         self.create_data_group()
         self.create_finance_group()
-        self.create_doc_group()
         self.create_other_group()
 
     def create_group_frame(self, parent, title):
@@ -32,22 +33,22 @@ class MainApplication:
         )
         return frame
 
-    def create_data_group(self):
-        """数据整理功能组"""
-        frame = self.create_group_frame(self.main_frame, "数据整理")
+    def create_file_group(self):
+        """文件操作功能组"""
+        frame = self.create_group_frame(self.main_frame, "文件操作")
         frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         
         buttons = [
             ("多表合并", self.open_data_merge),
-            ("批量SQL", self.open_sql_quick),
-            ("自动分表", lambda: self.show_feature("自动分表"))
+            ("自动分表", self.open_table_split),  # 修改这行
+            ("一人一档", self.open_batch_gen)
         ]
         self.add_buttons_to_frame(frame, buttons)
 
     def create_finance_group(self):
         """资金分析功能组"""
         frame = self.create_group_frame(self.main_frame, "资金分析")
-        frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         
         buttons = [
             ("简单示例", self.open_hello),
@@ -56,13 +57,13 @@ class MainApplication:
         ]
         self.add_buttons_to_frame(frame, buttons)
 
-    def create_doc_group(self):
-        """文档处理功能组"""
-        frame = self.create_group_frame(self.main_frame, "文档处理")
-        frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+    def create_data_group(self):
+        """数据处理功能组"""
+        frame = self.create_group_frame(self.main_frame, "数据处理")
+        frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         
         buttons = [
-            ("一人一档生成", self.open_batch_gen), 
+            ("SQL助手", self.open_sql_quick), 
             ("正在建设", lambda: self.show_feature("正在建设")),
             ("正在建设", lambda: self.show_feature("正在建设"))
         ]
@@ -129,15 +130,11 @@ class MainApplication:
         except Exception as e:
             messagebox.showerror("错误", f"无法打开简单示例：{str(e)}")
 
+    def open_table_split(self):
+        """打开自动分表工具"""
+        try:
+            TableSplitter(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开自动分表工具：{str(e)}")
 
-"""
-if __name__ == "__main__":
-    root = tk.Tk()
-    style = ttk.Style()
-    style.configure("Function.TButton", 
-                   font=('微软雅黑', 12),
-                   padding=8,
-                   relief="flat")
-    app = MainApplication(root)
-    root.mainloop()
-"""
+
