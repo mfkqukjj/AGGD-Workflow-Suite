@@ -75,7 +75,8 @@ class DataConcatTool(tk.Toplevel):
         frame = ttk.Frame(self.main_frame)
         frame.grid(row=3, column=0, pady=10)
         ttk.Button(frame, text="运行", command=self.run_merge).pack(side=tk.LEFT, padx=5)
-        ttk.Button(frame, text="退出", command=self.quit).pack(side=tk.LEFT)
+        ttk.Button(frame, text="重置", command=self.reset_all).pack(side=tk.LEFT, padx=5)  # 新增重置按钮
+        ttk.Button(frame, text="关闭", command=self.destroy).pack(side=tk.LEFT, padx=5)
 
     def select_files(self):
         self.input_paths = filedialog.askopenfilenames()
@@ -163,7 +164,28 @@ class DataConcatTool(tk.Toplevel):
                 os.startfile(output_dir)
             else:  # macOS/Linux
                 subprocess.Popen(['open', output_dir] if sys.platform == 'darwin' else ['xdg-open', output_dir])
-        self.destroy()
+
+    def reset_all(self):
+        """重置所有选择和设置"""
+        # 重置输入选择
+        self.input_paths = []
+        self.input_type.set(0)
+        self.input_label.config(text="当前选择：无")
+        
+        # 重置模板设置
+        self.template_path = ""
+        self.use_template.set(False)
+        self.template_btn.config(state="disabled")
+        self.template_label.config(text="未选择模板")
+        
+        # 重置输出设置
+        self.output_dir = ""
+        self.auto_save.set(False)
+        self.output_btn.config(state="normal")
+        self.output_label.config(text="当前输出目录：无")
+        
+        # 提示用户重置完成
+        messagebox.showinfo("提示", "所有设置已重置")
 
 if __name__ == "__main__":
     root = tk.Tk()

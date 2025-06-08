@@ -40,8 +40,8 @@ class MainApplication:
         
         buttons = [
             ("多表合并", self.open_data_merge),
-            ("自动分表", self.open_table_split),  # 修改这行
-            ("一人一档", self.open_batch_gen)
+            ("自动分表", self.open_table_split),
+            ("批量文件操作", self.open_file_operations)  # 新增
         ]
         self.add_buttons_to_frame(frame, buttons)
 
@@ -64,7 +64,7 @@ class MainApplication:
         
         buttons = [
             ("SQL助手", self.open_sql_quick), 
-            ("正在建设", lambda: self.show_feature("正在建设")),
+            ("一人一档", self.open_batch_gen),
             ("正在建设", lambda: self.show_feature("正在建设"))
         ]
         self.add_buttons_to_frame(frame, buttons)
@@ -136,5 +136,13 @@ class MainApplication:
             TableSplitter(self.root)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开自动分表工具：{str(e)}")
+
+    def open_file_operations(self):
+        """打开批量文件操作工具"""
+        try:
+            from .file_operations import FileOperations
+            FileOperations(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开批量文件操作工具：{str(e)}")
 
 
