@@ -50,6 +50,10 @@ python main.py
 - [ ] 添加配置持久化
 - [ ] 添加批处理功能
 
+### 具体细项
+- [ ] Excel to Excel定制批量转换
+
+
 ## 📄 许可证
 本项目采用 BSD 3-Clause License 许可证。详情请参见 [LICENSE](LICENSE) 文件。
 
