@@ -3,6 +3,9 @@ from tkinter import ttk, messagebox, filedialog, scrolledtext
 import os
 import glob
 import re
+import shutil
+import time
+import fnmatch
 
 class FileOperations(tk.Toplevel):
     def __init__(self, master):
@@ -29,7 +32,8 @@ class FileOperations(tk.Toplevel):
         
         buttons = [
             ("批量读取文件名", self.create_file_list_window),
-            ("批量修改文件名", self.create_rename_window)
+            ("批量修改文件名", self.create_rename_window),
+            ("批量提取", self.create_extract_window)  # 新增
         ]
         
         for text, command in buttons:
@@ -185,6 +189,81 @@ class FileOperations(tk.Toplevel):
         ttk.Button(button_frame, text="关闭",
                   command=dialog.destroy).pack(side=tk.LEFT)
 
+    def create_extract_window(self):
+        """创建批量提取窗口"""
+        dialog = tk.Toplevel(self)
+        dialog.title("批量文件提取")
+        dialog.geometry("600x500")
+        dialog.transient(self)
+        
+        main_frame = ttk.Frame(dialog, padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 源文件夹选择区域
+        source_frame = ttk.LabelFrame(main_frame, text="源文件夹", padding=5)
+        source_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.source_folder = tk.StringVar()
+        ttk.Label(source_frame, textvariable=self.source_folder,
+                 text="未选择文件夹").pack(side=tk.LEFT, padx=5)
+        ttk.Button(source_frame, text="选择文件夹",
+                  command=lambda: self.select_extract_source(dialog)).pack(side=tk.LEFT, padx=2)
+        
+        # 文件筛选条件区域
+        filter_frame = ttk.LabelFrame(main_frame, text="文件筛选", padding=5)
+        filter_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 文件类型/名称输入
+        pattern_frame = ttk.Frame(filter_frame)
+        pattern_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(pattern_frame, text="文件类型/名称:").pack(side=tk.LEFT, padx=5)
+        self.pattern_entry = ttk.Entry(pattern_frame)
+        self.pattern_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        
+        # 使用正则表达式选项
+        self.use_regex = tk.BooleanVar(value=False)
+        ttk.Checkbutton(filter_frame, text="使用正则表达式", 
+                        variable=self.use_regex).pack(anchor=tk.W, padx=5)
+        
+        # 目标文件夹选择区域
+        target_frame = ttk.LabelFrame(main_frame, text="存放目录", padding=5)
+        target_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.target_extract_folder = tk.StringVar()
+        ttk.Label(target_frame, textvariable=self.target_extract_folder,
+                 text="未选择目录").pack(side=tk.LEFT, padx=5)
+        ttk.Button(target_frame, text="选择存放目录",
+                  command=lambda: self.select_extract_target(dialog)).pack(side=tk.LEFT, padx=2)
+        
+        # 在源文件夹创建目录选项
+        self.create_in_source = tk.BooleanVar(value=True)
+        ttk.Checkbutton(target_frame, text="于源文件处创建根目录", 
+                        variable=self.create_in_source,
+                        command=self.toggle_target_selection).pack(anchor=tk.W, padx=5)
+        
+        # 在筛选条件区域下方添加操作模式选择
+        mode_frame = ttk.LabelFrame(main_frame, text="操作模式", padding=5)
+        mode_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.extract_mode = tk.StringVar(value="move")
+        ttk.Radiobutton(mode_frame, text="移动文件", 
+                        variable=self.extract_mode, 
+                        value="move").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_frame, text="复制文件", 
+                        variable=self.extract_mode, 
+                        value="copy").pack(side=tk.LEFT, padx=5)
+    
+        # 按钮区域
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(20, 0))
+        
+        ttk.Button(button_frame, text="运行",
+                  command=self.execute_extract).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="重置",
+                  command=lambda: self.reset_extract_form(dialog)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="关闭",
+                  command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+
     def select_folders(self, parent):
         """选择多个文件夹"""
         folder = filedialog.askdirectory(parent=parent)
@@ -193,6 +272,18 @@ class FileOperations(tk.Toplevel):
                 self.selected_folders.append(folder)
                 # 更新显示标签
                 self.folder_label.config(text=f"已选择文件夹：{len(self.selected_folders)}")
+                # 显示选择的文件夹列表
+                folders_str = "\n".join(self.selected_folders)
+                messagebox.showinfo("当前选择的文件夹", f"已选择的文件夹列表：\n{folders_str}")
+
+    def select_extract_folders(self, parent):
+        """选择多个文件夹用于提取"""
+        folder = filedialog.askdirectory(parent=parent)
+        if folder:
+            if folder not in self.selected_folders:  # 避免重复添加
+                self.selected_folders.append(folder)
+                # 更新显示标签
+                self.extract_folder_label.config(text=f"已选择文件夹：{len(self.selected_folders)}")
                 # 显示选择的文件夹列表
                 folders_str = "\n".join(self.selected_folders)
                 messagebox.showinfo("当前选择的文件夹", f"已选择的文件夹列表：\n{folders_str}")
@@ -375,70 +466,408 @@ class FileOperations(tk.Toplevel):
         
         messagebox.showinfo("完成", result_message)
 
-    # 添加清除方法
-    def clear_folders(self):
-        """清除已选择的文件夹"""
-        self.selected_folders = []
-        self.folder_label.config(text="已选择文件夹：0")
-        messagebox.showinfo("提示", "已清除所有选择的文件夹")
+    def select_folders(self, parent):
+        """选择多个文件夹"""
+        folder = filedialog.askdirectory(parent=parent)
+        if folder:
+            if folder not in self.selected_folders:  # 避免重复添加
+                self.selected_folders.append(folder)
+                # 更新显示标签
+                self.folder_label.config(text=f"已选择文件夹：{len(self.selected_folders)}")
+                # 显示选择的文件夹列表
+                folders_str = "\n".join(self.selected_folders)
+                messagebox.showinfo("当前选择的文件夹", f"已选择的文件夹列表：\n{folders_str}")
+
+    def select_extract_folders(self, parent):
+        """选择多个文件夹用于提取"""
+        folder = filedialog.askdirectory(parent=parent)
+        if folder:
+            if folder not in self.selected_folders:  # 避免重复添加
+                self.selected_folders.append(folder)
+                # 更新显示标签
+                self.extract_folder_label.config(text=f"已选择文件夹：{len(self.selected_folders)}")
+                # 显示选择的文件夹列表
+                folders_str = "\n".join(self.selected_folders)
+                messagebox.showinfo("当前选择的文件夹", f"已选择的文件夹列表：\n{folders_str}")
+
+    def select_target_folder(self):
+        """选择目标文件夹"""
+        folder = filedialog.askdirectory()
+        if folder:
+            self.target_folder.set(folder)
     
-    def copy_results(self):
-        """复制结果到剪贴板"""
+    def get_file_list(self):
+        """获取文件列表"""
+        if not self.selected_folders:
+            messagebox.showwarning("警告", "请先选择文件夹！")
+            return
+        
+        self.result_text.delete('1.0', tk.END)
+        total_files = 0
+        
+        for folder_index, folder in enumerate(self.selected_folders, 1):
+            folder_files = []
+            selected_types = [ext for ext, var in self.type_vars.items() if var.get()]
+            custom_pattern = self.custom_filter.get().strip()
+            
+            def get_files_from_dir(dir_path, is_root=True):
+                files = []
+                try:
+                    with os.scandir(dir_path) as entries:
+                        for entry in entries:
+                            if entry.is_file():
+                                # 排除临时文件
+                                if not (entry.name.startswith('~') or 
+                                      entry.name.startswith('.') or 
+                                      entry.name.endswith('.tmp') or 
+                                      entry.name.endswith('.temp') or 
+                                      '~$' in entry.name):
+                                
+                                    if not selected_types and not custom_pattern:
+                                        files.append(entry.path)
+                                    else:
+                                        if any(entry.name.endswith(t) for t in selected_types):
+                                            files.append(entry.path)
+                                        elif custom_pattern and glob.fnmatch.fnmatch(entry.name, custom_pattern):
+                                            files.append(entry.path)
+                        
+                            elif entry.is_dir() and self.include_subdirs.get() and not is_root:
+                                files.extend(get_files_from_dir(entry.path, False))
+                except Exception as e:
+                    messagebox.showerror("错误", f"读取目录失败：{str(e)}")
+                return files
+            
+            # 首先获取根目录文件
+            root_files = get_files_from_dir(folder)
+            folder_files.extend(root_files)
+            
+            # 如果包含子目录，获取子目录文件
+            if self.include_subdirs.get():
+                for root, dirs, _ in os.walk(folder):
+                    if root != folder:  # 跳过根目录
+                        subdir_files = get_files_from_dir(root, False)
+                        folder_files.extend(subdir_files)
+            
+            # 根据选择的方式排序
+            def sort_key(file_path):
+                name = os.path.basename(file_path)
+                if self.sort_method.get() == "type":
+                    # 按扩展名排序，相同扩展名按文件名排序
+                    ext = os.path.splitext(name)[1].lower()
+                    return (ext, name.lower())
+                else:
+                    # 按文件名排序
+                    return name.lower()
+            
+            # 分离根目录和子目录文件
+            root_files = [f for f in folder_files if os.path.dirname(f) == folder]
+            subdir_files = [f for f in folder_files if os.path.dirname(f) != folder]
+            
+            # 分别排序
+            root_files.sort(key=sort_key)
+            subdir_files.sort(key=sort_key)
+            
+            # 显示文件夹标题
+            folder_name = os.path.basename(folder) or folder
+            self.result_text.insert(tk.END, f"\n{'='*50}\n")
+            self.result_text.insert(tk.END, f"文件夹 {folder_index}: {folder_name}\n")
+            self.result_text.insert(tk.END, f"{'='*50}\n\n")
+            
+            # 显示根目录文件
+            if root_files:
+                self.result_text.insert(tk.END, "【根目录】\n")
+                for file_path in root_files:
+                    self.result_text.insert(tk.END, f"{os.path.basename(file_path)}\n")
+            
+            # 显示子目录文件
+            if subdir_files:
+                current_subdir = ""
+                for file_path in subdir_files:
+                    subdir = os.path.relpath(os.path.dirname(file_path), folder)
+                    if subdir != current_subdir:
+                        current_subdir = subdir
+                        self.result_text.insert(tk.END, f"\n【{subdir}】\n")
+                    self.result_text.insert(tk.END, f"    {os.path.basename(file_path)}\n")
+            
+            total_files += len(root_files) + len(subdir_files)
+        
+        # 显示总计
+        if self.selected_folders:
+            self.result_text.insert(tk.END, f"\n{'='*50}\n")
+            self.result_text.insert(tk.END, f"总计: {len(self.selected_folders)} 个文件夹, {total_files} 个文件\n")
+        
+        # 滚动到开头
+        self.result_text.see("1.0")
+        
+        # 显示完成消息
+        messagebox.showinfo("完成", f"共找到 {total_files} 个文件")
+
+    def save_results(self):
+        """保存结果到文件"""
         content = self.result_text.get('1.0', tk.END).strip()
-        if content:
-            self.clipboard_clear()
-            self.clipboard_append(content)
-            messagebox.showinfo("成功", "结果已复制到剪贴板！")
-        else:
-            messagebox.showwarning("警告", "没有可复制的内容！")
+        if not content:
+            messagebox.showwarning("警告", "没有可保存的内容！")
+            return
+            
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            messagebox.showinfo("成功", "文件保存成功！")
     
-    def read_current_files(self):
-        """读取当前选择文件夹中的文件名"""
-        folder = self.target_folder.get()
-        if not folder:
-            messagebox.showwarning("警告", "请先选择目标文件夹！")
+    def execute_rename(self):
+        """执行批量重命名"""
+        target_folder = self.target_folder.get()
+        if not target_folder:
+            messagebox.showwarning("警告", "请选择目标文件夹！")
+            return
+            
+        rules_text = self.rule_text.get('1.0', tk.END).strip()
+        if not rules_text:
+            messagebox.showwarning("警告", "请输入重命名规则！")
+            return
+            
+        # 解析规则
+        rules = {}
+        for line in rules_text.split('\n'):
+            if line.strip():
+                parts = re.split(r'\s+', line.strip(), maxsplit=1)
+                if len(parts) == 2:
+                    old_name, new_name = parts
+                    rules[old_name] = new_name
+        
+        if not rules:
+            messagebox.showwarning("警告", "未找到有效的重命名规则！")
+            return
+            
+        # 执行重命名
+        success_count = 0
+        errors = []
+        
+        for old_name, new_name in rules.items():
+            old_path = os.path.join(target_folder, old_name)
+            new_path = os.path.join(target_folder, new_name)
+            
+            try:
+                if os.path.exists(old_path):
+                    os.rename(old_path, new_path)
+                    success_count += 1
+                else:
+                    errors.append(f"文件不存在: {old_name}")
+            except Exception as e:
+                errors.append(f"重命名失败 {old_name}: {str(e)}")
+        
+        # 显示结果
+        result_message = f"成功重命名 {success_count} 个文件\n"
+        if errors:
+            result_message += "\n失败项目：\n" + "\n".join(errors)
+        
+        messagebox.showinfo("完成", result_message)
+
+    def create_extract_window(self):
+        """创建批量提取窗口"""
+        dialog = tk.Toplevel(self)
+        dialog.title("批量文件提取")
+        dialog.geometry("600x500")
+        dialog.transient(self)
+        
+        main_frame = ttk.Frame(dialog, padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 源文件夹选择区域
+        source_frame = ttk.LabelFrame(main_frame, text="源文件夹", padding=5)
+        source_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.source_folder = tk.StringVar()
+        ttk.Label(source_frame, textvariable=self.source_folder,
+                 text="未选择文件夹").pack(side=tk.LEFT, padx=5)
+        ttk.Button(source_frame, text="选择文件夹",
+                  command=lambda: self.select_extract_source(dialog)).pack(side=tk.LEFT, padx=2)
+        
+        # 文件筛选条件区域
+        filter_frame = ttk.LabelFrame(main_frame, text="文件筛选", padding=5)
+        filter_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 文件类型/名称输入
+        pattern_frame = ttk.Frame(filter_frame)
+        pattern_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(pattern_frame, text="文件类型/名称:").pack(side=tk.LEFT, padx=5)
+        self.pattern_entry = ttk.Entry(pattern_frame)
+        self.pattern_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        
+        # 使用正则表达式选项
+        self.use_regex = tk.BooleanVar(value=False)
+        ttk.Checkbutton(filter_frame, text="使用正则表达式", 
+                        variable=self.use_regex).pack(anchor=tk.W, padx=5)
+        
+        # 目标文件夹选择区域
+        target_frame = ttk.LabelFrame(main_frame, text="存放目录", padding=5)
+        target_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.target_extract_folder = tk.StringVar()
+        ttk.Label(target_frame, textvariable=self.target_extract_folder,
+                 text="未选择目录").pack(side=tk.LEFT, padx=5)
+        ttk.Button(target_frame, text="选择存放目录",
+                  command=lambda: self.select_extract_target(dialog)).pack(side=tk.LEFT, padx=2)
+        
+        # 在源文件夹创建目录选项
+        self.create_in_source = tk.BooleanVar(value=True)
+        ttk.Checkbutton(target_frame, text="于源文件处创建根目录", 
+                        variable=self.create_in_source,
+                        command=self.toggle_target_selection).pack(anchor=tk.W, padx=5)
+        
+        # 在筛选条件区域下方添加操作模式选择
+        mode_frame = ttk.LabelFrame(main_frame, text="操作模式", padding=5)
+        mode_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.extract_mode = tk.StringVar(value="move")
+        ttk.Radiobutton(mode_frame, text="移动文件", 
+                        variable=self.extract_mode, 
+                        value="move").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_frame, text="复制文件", 
+                        variable=self.extract_mode, 
+                        value="copy").pack(side=tk.LEFT, padx=5)
+    
+        # 按钮区域
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(20, 0))
+        
+        ttk.Button(button_frame, text="运行",
+                  command=self.execute_extract).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="重置",
+                  command=lambda: self.reset_extract_form(dialog)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="关闭",
+                  command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+
+    def select_extract_source(self, parent):
+        """选择源文件夹"""
+        folder = filedialog.askdirectory(parent=parent)
+        if folder:
+            self.source_folder.set(folder)
+            if self.create_in_source.get():
+                self.update_extract_target_folder()
+
+    def select_extract_target(self, parent):
+        """选择目标文件夹"""
+        folder = filedialog.askdirectory(parent=parent)
+        if folder:
+            self.target_extract_folder.set(folder)
+
+    def toggle_target_selection(self):
+        """切换目标文件夹选择方式"""
+        if self.create_in_source.get():
+            self.update_extract_target_folder()
+        else:
+            self.target_extract_folder.set("未选择目录")
+
+    def update_extract_target_folder(self):
+        """更新目标文件夹路径"""
+        source = self.source_folder.get()
+        if source and self.create_in_source.get():
+            timestamp = time.strftime("%Y-%m-%d %H%M")
+            target = os.path.join(source, f"【文件提取结果】{timestamp}")
+            self.target_extract_folder.set(target)
+
+    def reset_extract_form(self, dialog):
+        """重置表单"""
+        self.source_folder.set("未选择文件夹")
+        self.target_extract_folder.set("未选择目录")
+        self.pattern_entry.delete(0, tk.END)
+        self.use_regex.set(False)
+        self.create_in_source.set(True)
+        self.extract_mode.set("move")  # 重置为默认移动模式
+
+    def execute_extract(self):
+        """执行文件提取"""
+        source = self.source_folder.get()
+        target = self.target_extract_folder.get()
+        pattern = self.pattern_entry.get().strip()
+        
+        if not source or source == "未选择文件夹":
+            messagebox.showwarning("警告", "请选择源文件夹！")
+            return
+        
+        if not target or target == "未选择目录":
+            messagebox.showwarning("警告", "请选择存放目录！")
+            return
+        
+        if not pattern:
+            messagebox.showwarning("警告", "请输入文件类型/名称筛选条件！")
             return
         
         try:
-            # 获取文件列表
-            files = []
-            for root, _, filenames in os.walk(folder):
-                for filename in filenames:
-                    # 排除临时文件
-                    if not (filename.startswith('~') or 
-                           filename.startswith('.') or 
-                           filename.endswith('.tmp') or 
-                           filename.endswith('.temp') or 
-                           '~$' in filename):
-                        # 获取相对路径
-                        rel_path = os.path.relpath(os.path.join(root, filename), folder)
-                        files.append(rel_path)
+            # 创建目标文件夹
+            os.makedirs(target, exist_ok=True)
             
-            # 清空并显示结果
-            self.preview_text.delete('1.0', tk.END)
+            # 收集符合条件的文件
+            matched_files = []
+            for root, _, files in os.walk(source):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    
+                    # 根据选择的匹配方式进行匹配
+                    if self.use_regex.get():
+                        if re.search(pattern, file):
+                            matched_files.append(file_path)
+                    else:
+                        if fnmatch.fnmatch(file, pattern):
+                            matched_files.append(file_path)
+        
+            if not matched_files:
+                messagebox.showinfo("提示", "未找到符合条件的文件！")
+                return
             
-            # 按文件夹层级显示
-            current_folder = ""
-            for file_path in sorted(files):
-                folder_path = os.path.dirname(file_path)
-                if folder_path and folder_path != current_folder:
-                    current_folder = folder_path
-                    self.preview_text.insert(tk.END, f"\n[{folder_path}]\n")
-                
-                file_name = os.path.basename(file_path)
-                indent = "    " if folder_path else ""
-                self.preview_text.insert(tk.END, f"{indent}{file_name}\n")
+            # 执行操作
+            success_count = 0
+            errors = []
+            operation = "移动" if self.extract_mode.get() == "move" else "复制"
             
-            messagebox.showinfo("完成", f"成功读取 {len(files)} 个文件")
+            for file_path in matched_files:
+                try:
+                    file_name = os.path.basename(file_path)
+                    file_base, file_ext = os.path.splitext(file_name)
+                    target_path = os.path.join(target, file_name)
+                    
+                    # 如果目标文件已存在，重命名文件
+                    if os.path.exists(target_path):
+                        folder_name = os.path.basename(os.path.dirname(file_path))
+                        mod_time = time.strftime("%Y%m%d%H%M", 
+                                               time.localtime(os.path.getmtime(file_path)))
+                        new_name = f"{file_base} - {folder_name} - 修改时间{mod_time}{file_ext}"
+                        target_path = os.path.join(target, new_name)
+                    
+                    # 根据选择的模式执行操作
+                    if self.extract_mode.get() == "move":
+                        shutil.move(file_path, target_path)
+                    else:
+                        shutil.copy2(file_path, target_path)  # copy2保留元数据
+                    success_count += 1
+                except Exception as e:
+                    errors.append(f"{operation}失败 {os.path.basename(file_path)}: {str(e)}")
+        
+            # 显示结果
+            result = f"成功{operation} {success_count} 个文件到目标文件夹"
+            if errors:
+                result += "\n\n失败项目：\n" + "\n".join(errors)
+            
+            if success_count > 0:
+                answer = messagebox.askyesno("完成", f"{result}\n\n是否打开目标文件夹？")
+                if answer:
+                    try:
+                        if os.name == 'nt':  # Windows
+                            os.startfile(target)
+                        else:  # macOS/Linux
+                            import subprocess
+                            subprocess.Popen(['open', target] if sys.platform == 'darwin' 
+                                           else ['xdg-open', target])
+                    except Exception as e:
+                        messagebox.showerror("错误", f"打开文件夹失败：{str(e)}")
+            else:
+                messagebox.showinfo("完成", result)
+        
         except Exception as e:
-            messagebox.showerror("错误", f"读取文件列表时出错：\n{str(e)}")
-
-    def copy_results(self, text_widget):
-        """复制文本框内容到剪贴板"""
-        content = text_widget.get('1.0', tk.END).strip()
-        if content:
-            self.clipboard_clear()
-            self.clipboard_append(content)
-            messagebox.showinfo("成功", "内容已复制到剪贴板！")
-        else:
-            messagebox.showwarning("警告", "没有可复制的内容！")
+            messagebox.showerror("错误", f"执行过程中出错：\n{str(e)}")
