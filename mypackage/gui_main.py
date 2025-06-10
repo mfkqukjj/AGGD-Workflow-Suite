@@ -2,24 +2,33 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from .dataconcat import DataConcatTool
 from .afileperpeople import BatchGenerator
-from .sql_quick import SqlQuick
+from .sql_quick import SqlQuick  # 只导入 SqlQuick
 from .hello import HelloWorld
-from .table_split import TableSplitter  # 新增导入
+from .table_split import TableSplitter
+from .table_join import TableJoinTool
+from .about_viewer import AboutViewer  # 添加导入
 
 class MainApplication:
     def __init__(self, root):
         self.root = root
         self.root.title("AGGD-Workflow-Suite工具箱")
-        self.root.geometry("800x600")
+        self.root.geometry("1280x800")  # 调整默认窗口大小
         
         # 创建主容器
         self.main_frame = ttk.Frame(self.root, padding=20)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # 创建四大功能组
+        # 配置网格权重，使布局更均匀
+        self.main_frame.columnconfigure(0, weight=1)
+        self.main_frame.columnconfigure(1, weight=1)
+        self.main_frame.columnconfigure(2, weight=1)
+        
+        # 创建六大功能组
         self.create_file_group()
         self.create_data_group()
         self.create_finance_group()
+        self.create_sql_group()  # 新增
+        self.create_tools_group()  # 新增
         self.create_other_group()
 
     def create_group_frame(self, parent, title):
@@ -41,21 +50,12 @@ class MainApplication:
         buttons = [
             ("多表合并", self.open_data_merge),
             ("自动分表", self.open_table_split),
-            ("批量文件操作", self.open_file_operations)  # 新增
+            ("批量文件操作", self.open_file_operations),
+            ("一人一档", self.open_batch_gen),
+            ("文件重命名", lambda: self.show_feature("文件重命名")),
+            ("文件加密", lambda: self.show_feature("文件加密"))
         ]
-        self.add_buttons_to_frame(frame, buttons)
-
-    def create_finance_group(self):
-        """资金分析功能组"""
-        frame = self.create_group_frame(self.main_frame, "资金分析")
-        frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
-        
-        buttons = [
-            ("简单示例", self.open_hello),
-            ("简单示例", self.open_hello),
-            ("简单示例", self.open_hello)  # 简单示例展示
-        ]
-        self.add_buttons_to_frame(frame, buttons)
+        self.add_buttons_to_frame(frame, buttons, "3x2")  # 使用3x2布局
 
     def create_data_group(self):
         """数据处理功能组"""
@@ -63,35 +63,106 @@ class MainApplication:
         frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         
         buttons = [
-            ("SQL助手", self.open_sql_quick), 
+            ("表间关联", self.open_table_join),  # 修改这行
+            ("数据验证", lambda: self.show_feature("数据验证")),
             ("一人一档", self.open_batch_gen),
-            ("正在建设", lambda: self.show_feature("正在建设"))
+            ("数据分析", lambda: self.show_feature("数据分析")),
+            ("数据可视化", lambda: self.show_feature("数据可视化")),
+            ("数据导出", lambda: self.show_feature("数据导出"))
         ]
         self.add_buttons_to_frame(frame, buttons)
+
+    def create_finance_group(self):
+        """资金分析功能组"""
+        frame = self.create_group_frame(self.main_frame, "资金分析")
+        frame.grid(row=0, column=2, padx=10, pady=10, sticky="nsew")
+        
+        buttons = [
+            ("资金流向", lambda: self.show_feature("资金流向")),
+            ("预算分析", lambda: self.show_feature("预算分析")),
+            ("支出统计", lambda: self.show_feature("支出统计")),
+            ("收入分析", lambda: self.show_feature("收入分析")),
+            ("资金预警", lambda: self.show_feature("资金预警")),
+            ("报表生成", lambda: self.show_feature("报表生成"))
+        ]
+        self.add_buttons_to_frame(frame, buttons)
+
+    def create_sql_group(self):
+        """SQL助手功能组"""
+        frame = self.create_group_frame(self.main_frame, "SQL助手")
+        frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        
+        buttons = [
+            ("SQL生成器", self.open_sql_quick),
+            ("SQL格式化", lambda: self.open_sql_with_feature("sql_formatter")),
+            ("CASE生成", lambda: self.open_sql_with_feature("case_builder")),
+            ("距离计算", lambda: self.open_sql_with_feature("geo_distance")),
+            ("批量查询", lambda: self.open_sql_with_feature("batch_query")),
+            ("批量录入", lambda: self.open_sql_with_feature("batch_insert"))
+        ]
+        self.add_buttons_to_frame(frame, buttons, "3x2")  # 使用3x2布局
+
+    def create_tools_group(self):
+        """实用工具组"""
+        frame = self.create_group_frame(self.main_frame, "实用工具")
+        frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+        
+        buttons = [
+            ("文本比对", lambda: self.show_feature("文本比对")),
+            ("代码生成", lambda: self.show_feature("代码生成")),
+            ("格式转换", lambda: self.show_feature("格式转换")),
+            ("批量重命名", lambda: self.show_feature("批量重命名"))
+        ]
+        self.add_buttons_to_frame(frame, buttons, "2x2")  # 使用2x2布局
 
     def create_other_group(self):
         """其他功能组"""
         frame = self.create_group_frame(self.main_frame, "其他功能")
-        frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+        frame.grid(row=1, column=2, padx=10, pady=10, sticky="nsew")
         
         buttons = [
             ("系统设置", lambda: self.show_feature("系统设置")),
             ("使用帮助", lambda: self.show_feature("帮助中心")),
-            ("关于我们", lambda: self.show_feature("关于页面"))
+            ("关于我们", self.show_about),  # 修改这行
+            ("检查更新", lambda: self.show_feature("检查更新"))
         ]
         self.add_buttons_to_frame(frame, buttons)
 
-    def add_buttons_to_frame(self, frame, buttons):
-        """为指定框架添加按钮"""
-        for text, cmd in buttons:
-            btn = ttk.Button(
-                frame,
-                text=text,
-                width=18,
-                command=cmd,
-                style="Function.TButton"
-            )
-            btn.pack(pady=8, fill=tk.X)
+    def add_buttons_to_frame(self, frame, buttons, layout="3x2"):
+        """为指定框架添加按钮
+        Args:
+            frame: 按钮容器
+            buttons: 按钮配置列表
+            layout: 布局方式 "3x2"或"2x2"
+        """
+        # 配置列权重
+        frame.columnconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=1)
+        
+        if layout == "3x2":
+            # 3行2列布局
+            for i, (text, cmd) in enumerate(buttons):
+                row = i // 2    # 计算行号
+                col = i % 2     # 计算列号
+                btn = ttk.Button(
+                    frame,
+                    text=text,
+                    command=cmd,
+                    style="Function.TButton"
+                )
+                btn.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+        else:
+            # 2行2列布局
+            for i, (text, cmd) in enumerate(buttons):
+                row = i // 2    # 计算行号
+                col = i % 2     # 计算列号
+                btn = ttk.Button(
+                    frame,
+                    text=text,
+                    command=cmd,
+                    style="Function.TButton"
+                )
+                btn.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
 
     def show_feature(self, feature_name):
         """默认功能演示窗口（供后续替换）"""
@@ -144,5 +215,47 @@ class MainApplication:
             FileOperations(self.root)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开批量文件操作工具：{str(e)}")
+
+    def open_table_join(self):
+        """打开表间关联工具"""
+        try:
+            TableJoinTool(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开表间关联工具：{str(e)}")
+
+    def open_sql_with_feature(self, feature_type):
+        """打开SQL工具并直接调用指定功能"""
+        try:
+            sql_tool = SqlQuick(self.root)
+            if feature_type == "sql_formatter":
+                sql_tool.sql_formatter()
+            elif feature_type == "case_builder":
+                sql_tool.case_builder()
+            elif feature_type == "geo_distance":
+                sql_tool.geo_distance()
+            elif feature_type == "batch_query":
+                sql_tool.batch_query()
+            elif feature_type == "batch_insert":
+                sql_tool.batch_insert()
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开{feature_type}功能：{str(e)}")
+
+    def show_about(self):
+        """显示关于我们页面"""
+        try:
+            AboutViewer(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开关于页面：{str(e)}")
+
+
+class SqlFeatures:
+    def create_dialog(self, title, size="600x500"):
+        """创建通用对话框"""
+        dialog = tk.Toplevel(self.master)
+        dialog.title(title)
+        dialog.geometry(size)
+        dialog.transient(self.master)
+        dialog.grab_set()
+        return dialog
 
 
