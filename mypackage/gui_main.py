@@ -2,11 +2,11 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from .dataconcat import DataConcatTool
 from .afileperpeople import BatchGenerator
-from .sql_quick import SqlQuick  # 只导入 SqlQuick
+from .sql_quick import SqlQuick
 from .hello import HelloWorld
 from .table_split import TableSplitter
-from .table_join import TableJoinTool
-from .about_viewer import AboutViewer  # 添加导入
+from .jz_xcc_bank_split import TableBankSplitter
+from .excel_table_join import TableJoinTool 
 
 class MainApplication:
     def __init__(self, root):
@@ -108,10 +108,10 @@ class MainApplication:
         frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
         
         buttons = [
-            ("文本比对", lambda: self.show_feature("文本比对")),
-            ("代码生成", lambda: self.show_feature("代码生成")),
-            ("格式转换", lambda: self.show_feature("格式转换")),
-            ("批量重命名", lambda: self.show_feature("批量重命名"))
+            ("财务XCC分表", self.open_bank_split),
+            ("待开发", lambda: self.show_feature("待开发")),
+            ("待开发", lambda: self.show_feature("待开发")),
+            ("待开发", lambda: self.show_feature("待开发"))
         ]
         self.add_buttons_to_frame(frame, buttons, "2x2")  # 使用2x2布局
 
@@ -188,6 +188,13 @@ class MainApplication:
             SqlQuick(self.root)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开SQL工具：{str(e)}")
+
+    def open_bank_split(self):
+        """打开财务表格分表工具"""
+        try:
+            TableBankSplitter(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开财务表格分表工具：{str(e)}")
 
 
     def open_batch_gen(self):
