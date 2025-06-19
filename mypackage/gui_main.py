@@ -7,6 +7,7 @@ from .hello import HelloWorld
 from .table_split import TableSplitter
 from .jz_xcc_bank_split import TableBankSplitter
 from .excel_table_join import TableJoinTool 
+from .fund_flow_analysis import FundFlowAnalysis
 
 class MainApplication:
     def __init__(self, root):
@@ -78,7 +79,7 @@ class MainApplication:
         frame.grid(row=0, column=2, padx=10, pady=10, sticky="nsew")
         
         buttons = [
-            ("资金流向", lambda: self.show_feature("资金流向")),
+            ("JZD资金分析", self.open_fund_flow),  # 修改这一行
             ("预算分析", lambda: self.show_feature("预算分析")),
             ("支出统计", lambda: self.show_feature("支出统计")),
             ("收入分析", lambda: self.show_feature("收入分析")),
@@ -253,6 +254,14 @@ class MainApplication:
             AboutViewer(self.root)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开关于页面：{str(e)}")
+
+    def open_fund_flow(self):
+        """打开资金流向分析工具"""
+        try:
+            from . import fund_flow_analysis
+            fund_flow_analysis.FundFlowAnalysis(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开资金流向分析工具：{str(e)}")
 
 
 class SqlFeatures:
