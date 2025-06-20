@@ -176,12 +176,46 @@ class FundFlowAnalysis:
         # 重命名列
         if hasattr(self, 'column_mapping'):
             df = df.rename(columns={v: k for k, v in self.column_mapping.items() if v})
-        
+
         # 1. 基础处理
         df['交易日期时间'] = pd.to_datetime(df['交易时间'].astype(str).str.pad(14, fillchar='0'), 
                                   format='%Y%m%d%H%M%S')
         df = df[df['备注'] != "付款失败"]
-        
+
+        # 1.1 构建 df_received_name（原有逻辑）
+        df_received = df[df['借贷标志'] == '贷'].copy()
+        df_received = df_received.sort_values('交易日期时间', ascending=False)
+        df_received_name = df_received.drop_duplicates(
+            subset=['收款方支付帐号', '收款方的商户名称'], keep='first'
+        )[['收款方支付帐号', '收款方的商户名称', '交易日期时间']]
+        df_received_name = df_received_name.sort_values('交易日期时间', ascending=False)
+        df_received_name = df_received_name.drop_duplicates(subset=['收款方支付帐号'], keep='first')
+        df_received_name = df_received_name.rename(
+            columns={'收款方支付帐号': '账号', '收款方的商户名称': '系统姓名'}
+        )
+
+        # 1.2 构建 df_system_account
+        df_borrow = df[df['借贷标志'] == '借'].copy()
+        df_borrow = df_borrow.sort_values('交易日期时间', ascending=False)
+        df_borrow_acc = df_borrow[['查询账号', '付款方支付帐号', '交易日期时间']]
+        df_borrow_acc = df_borrow_acc.rename(columns={'付款方支付帐号': '支付账号'})
+
+        df_credit = df[df['借贷标志'] == '贷'].copy()
+        df_credit = df_credit.sort_values('交易日期时间', ascending=False)
+        df_credit_acc = df_credit[['查询账号', '收款方支付帐号', '交易日期时间']]
+        df_credit_acc = df_credit_acc.rename(columns={'收款方支付帐号': '支付账号'})
+
+        df_system_account = pd.concat([df_borrow_acc, df_credit_acc], ignore_index=True)
+        # 只保留 查询账号 ≠ 支付账号 且 支付账号长度 > 3
+        df_system_account = df_system_account[
+            (df_system_account['查询账号'] != df_system_account['支付账号']) &
+            (df_system_account['支付账号'].astype(str).str.len() > 3)
+        ]
+
+        # 优先保留支付账号<>查询账号，再按时间倒序，仅保留每个支付账号的最新一条
+        df_system_account = df_system_account.sort_values('交易日期时间', ascending=False)
+        df_system_account = df_system_account.drop_duplicates(subset=['支付账号'], keep='first')
+
         # 2. 计算商户类型
         def get_account_type(name):
             """判断账户类型
@@ -262,7 +296,7 @@ class FundFlowAnalysis:
             
             # 判断逻辑:
             # 1. 如果包含公司关键词且长度>10，判定为公司
-            if any(keyword in name for keyword in company_keywords) and len(name) > 10:
+            if any(keyword in name for keyword in company_keywords) and len(name) >= 8:
                 return "公司"
             
             # 2. 如果包含个人名称特征且长度<=10，判定为个人
@@ -298,7 +332,6 @@ class FundFlowAnalysis:
             ))
             
             return pd.Series({
-                '系统姓名': group['收款方的商户名称'].iloc[0],
                 '交易笔数': total_count,
                 '收入笔数': len(credit_records),
                 '支出笔数': len(debit_records),
@@ -321,29 +354,59 @@ class FundFlowAnalysis:
         # 4. 生成最终结果
         result = df.groupby(['付款方支付帐号', '收款方支付帐号']).apply(calculate_group_stats).reset_index()
         result.columns = [
-            '用户id', '交易对手', '系统姓名', '交易笔数', '收入笔数', '支出笔数',
+            '用户id', '交易对手',  '交易笔数', '收入笔数', '支出笔数',
             '进出类型', '流水总额', '净流入金额', '最早交易时间', '最新交易时间',
             '交易天数跨度', '收入金额', '支出金额', '平均单笔收入金额',
             '平均单笔支出金额', '最大单笔收入金额', '最大单笔支出金额',
             '交易备注', '关联交易详情'
         ]
-        
-        # 5. 添加其他字段
-        result['对手账户类型'] = result['系统姓名'].apply(get_account_type)
-        result['微信号'] = None  # 需要从原表恢复微信号表中获取
-        result['对手微信号'] = None
-        result['对手系统姓名'] = None
-        
-        # 6. 调整列顺序
+
+        # 5. 根据 df_received_name 匹配系统姓名和对手系统姓名
+        result = result.merge(
+            df_received_name[['账号', '系统姓名']],
+            how='left',
+            left_on='用户id',
+            right_on='账号'
+        ).drop(columns=['账号'])
+
+        result = result.merge(
+            df_received_name[['账号', '系统姓名']].rename(columns={'系统姓名': '对手系统姓名'}),
+            how='left',
+            left_on='交易对手',
+            right_on='账号'
+        ).drop(columns=['账号'])
+
+        # 6. 添加其他字段（调证账号、对手账号）
+        result = result.merge(
+            df_system_account[['查询账号', '支付账号']].rename(columns={'查询账号': '调证账号'}),
+            how='left',
+            left_on='用户id',
+            right_on='支付账号'
+        ).drop(columns=['支付账号'])
+
+        result = result.merge(
+            df_system_account[['查询账号', '支付账号']].rename(columns={'查询账号': '对手账号'}),
+            how='left',
+            left_on='交易对手',
+            right_on='支付账号'
+        ).drop(columns=['支付账号'])
+
+        # 字段类型强制为文本
+        for col in ['用户id', '调证账号', '交易对手', '对手账号']:
+            result[col] = result[col].astype(str)
+
+        result['对手账户类型'] = result['对手系统姓名'].apply(get_account_type)
+
+        # 7. 调整列顺序
         final_columns = [
-            '用户id', '微信号', '系统姓名', '交易对手', '对手微信号', 
+            '用户id', '调证账号', '系统姓名', '交易对手', '对手账号', 
             '对手账户类型', '对手系统姓名', '交易笔数', '收入笔数', '支出笔数',
             '进出类型', '流水总额', '净流入金额', '最早交易时间', '最新交易时间',
             '交易天数跨度', '收入金额', '支出金额', '平均单笔收入金额',
             '平均单笔支出金额', '最大单笔收入金额', '最大单笔支出金额',
             '交易备注', '关联交易详情'
         ]
-        
+
         return result[final_columns]
 
     def open_file_location(self, file_path):
