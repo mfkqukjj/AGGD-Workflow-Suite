@@ -179,3 +179,12 @@ cython_debug/
 # 临时项目特定目录
 .github/
 Else Project/
+elseignore/
+test_data/
+buildhistory/
+
+
+# 公司logo及相关隐私信息
+金之盾/
+金之盾*
+app.ico

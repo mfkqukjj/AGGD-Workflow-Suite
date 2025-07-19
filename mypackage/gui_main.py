@@ -253,7 +253,7 @@ class MainApplication:
         try:
             AboutViewer(self.root)
         except Exception as e:
-            messagebox.showerror("错误", f"无法打开关于页面：{str(e)}")
+            messagebox.showerror("开发中", f"页面建设中：{str(e)}")
 
     def open_fund_flow(self):
         """打开资金流向分析工具"""
