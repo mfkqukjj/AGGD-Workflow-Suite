@@ -8,6 +8,7 @@ from .table_split import TableSplitter
 from .jz_xcc_bank_split import TableBankSplitter
 from .excel_table_join import TableJoinTool 
 from .fund_flow_analysis import FundFlowAnalysis
+from .about_viewer import AboutViewer
 
 class MainApplication:
     def __init__(self, root):
@@ -104,7 +105,7 @@ class MainApplication:
         self.add_buttons_to_frame(frame, buttons, "3x2")  # 使用3x2布局
 
     def create_tools_group(self):
-        """实用工具组"""
+        """建模工具"""
         frame = self.create_group_frame(self.main_frame, "实用工具")
         frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
         
