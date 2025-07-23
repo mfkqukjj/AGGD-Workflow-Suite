@@ -9,6 +9,8 @@ from .jz_xcc_bank_split import TableBankSplitter
 from .excel_table_join import TableJoinTool 
 from .fund_flow_analysis import FundFlowAnalysis
 from .about_viewer import AboutViewer
+from .file_split import FileSplitDialog
+from .file_format_convert import FileFormatConvertDialog
 
 class MainApplication:
     def __init__(self, root):
@@ -29,8 +31,8 @@ class MainApplication:
         self.create_file_group()
         self.create_data_group()
         self.create_finance_group()
-        self.create_sql_group()  # 新增
-        self.create_tools_group()  # 新增
+        self.create_sql_group() 
+        self.create_tools_group() 
         self.create_other_group()
 
     def create_group_frame(self, parent, title):
@@ -54,7 +56,7 @@ class MainApplication:
             ("自动分表", self.open_table_split),
             ("批量文件操作", self.open_file_operations),
             ("一人一档", self.open_batch_gen),
-            ("文件重命名", lambda: self.show_feature("文件重命名")),
+            ("待开发", lambda: self.show_feature("待开发"))
             ("文件加密", lambda: self.show_feature("文件加密"))
         ]
         self.add_buttons_to_frame(frame, buttons, "3x2")  # 使用3x2布局
@@ -65,10 +67,10 @@ class MainApplication:
         frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         
         buttons = [
-            ("表间关联", self.open_table_join),  # 修改这行
-            ("数据验证", lambda: self.show_feature("数据验证")),
+            ("表间关联", self.open_table_join),  
+            ("文件分切", self.open_file_split),
             ("一人一档", self.open_batch_gen),
-            ("数据分析", lambda: self.show_feature("数据分析")),
+            ("数据格式转换", self.open_file_format_convert),
             ("数据可视化", lambda: self.show_feature("数据可视化")),
             ("数据导出", lambda: self.show_feature("数据导出"))
         ]
@@ -231,6 +233,17 @@ class MainApplication:
             TableJoinTool(self.root)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开表间关联工具：{str(e)}")
+
+    def open_file_split(self):
+        """打开文件分割工具"""
+        FileSplitDialog(self.root)
+
+    def open_file_format_convert(self):
+        """打开文件格式转换工具"""
+        try:
+            FileFormatConvertDialog(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开文件格式转换工具：{str(e)}")
 
     def open_sql_with_feature(self, feature_type):
         """打开SQL工具并直接调用指定功能"""
