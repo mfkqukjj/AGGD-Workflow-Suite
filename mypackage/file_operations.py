@@ -6,6 +6,8 @@ import re
 import shutil
 import time
 import fnmatch
+import sys
+import subprocess
 
 class FileOperations(tk.Toplevel):
     def __init__(self, master):
@@ -861,7 +863,6 @@ class FileOperations(tk.Toplevel):
                         if os.name == 'nt':  # Windows
                             os.startfile(target)
                         else:  # macOS/Linux
-                            import subprocess
                             subprocess.Popen(['open', target] if sys.platform == 'darwin' 
                                            else ['xdg-open', target])
                     except Exception as e:
@@ -871,3 +872,15 @@ class FileOperations(tk.Toplevel):
         
         except Exception as e:
             messagebox.showerror("错误", f"执行过程中出错：\n{str(e)}")
+
+    def open_folder(self, path):
+        """跨平台打开文件夹"""
+        try:
+            if sys.platform == 'darwin':  # macOS
+                subprocess.run(['open', path])
+            elif sys.platform == 'win32':  # Windows
+                os.startfile(path)
+            else:  # Linux
+                subprocess.run(['xdg-open', path])
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开文件夹：{str(e)}")

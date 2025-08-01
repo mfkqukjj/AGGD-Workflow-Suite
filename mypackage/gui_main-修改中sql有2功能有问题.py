@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from .dataconcat import DataConcatTool
 from .afileperpeople import BatchGenerator
-from .sql_quick副本 import SqlQuick
+#from .sql_quick import SqlQuick
 from .hello import HelloWorld
 from .table_split import TableSplitter
 from .jz_xcc_bank_split import TableBankSplitter
@@ -11,12 +11,17 @@ from .fund_flow_analysis import FundFlowAnalysis
 from .about_viewer import AboutViewer
 from .file_split import FileSplitDialog
 from .file_format_convert import FileFormatConvertDialog
+import sys  # <-- Add this import
 
 class MainApplication:
     def __init__(self, root):
         self.root = root
         self.root.title("AGGD-Workflow-Suite工具箱")
         self.root.geometry("1280x800")  # 调整默认窗口大小
+        
+        # macOS专用：确保应用在后台时也能响应重开
+        #if sys.platform == 'darwin':
+        #    root.createcommand('tk::mac::ReopenApplication', root.lift)
         
         # 创建主容器
         self.main_frame = ttk.Frame(self.root, padding=20)
@@ -95,7 +100,7 @@ class MainApplication:
         self.add_buttons_to_frame(frame, buttons)
 
     def create_sql_group(self):
-        """SQL建模助手功能组"""
+        """SQL助手功能组"""
         frame = self.create_group_frame(self.main_frame, "建模助手")
         frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         
@@ -105,7 +110,8 @@ class MainApplication:
             ("CASE生成", lambda: self.open_sql_with_feature("case_builder")),
             ("距离计算", lambda: self.open_sql_with_feature("geo_distance")),
             ("批量查询", lambda: self.open_sql_with_feature("batch_query")),
-            ("批量录入", lambda: self.open_sql_with_feature("batch_insert"))
+            ("批量录入", lambda: self.open_sql_with_feature("batch_insert")),
+            ("双重聚合", lambda: self.show_feature("待开发"))
         ]
         self.add_buttons_to_frame(frame, buttons, "3x2")  # 使用3x2布局
 
@@ -184,18 +190,6 @@ class MainApplication:
                  font=('微软雅黑', 14)).pack(pady=10)
         ttk.Label(content, text="后续可以在此处添加实际功能代码",
                  font=('微软雅黑', 10)).pack()
-    def show_feature(self, feature_name):
-        """默认功能演示窗口（供后续替换）"""
-        popup = tk.Toplevel(self.root)
-        popup.title(feature_name)
-
-        content = ttk.Frame(popup, padding=20)
-        content.pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(content, text=f"这是【{feature_name}】的演示界面",
-                 font=('微软雅黑', 14)).pack(pady=10)
-        ttk.Label(content, text="后续可以在此处添加实际功能代码",
-                 font=('微软雅黑', 10)).pack()
         ttk.Button(content, text="关闭", command=popup.destroy).pack(pady=15)
 
     def open_data_merge(self):
@@ -264,17 +258,24 @@ class MainApplication:
     def open_sql_with_feature(self, feature_type):
         """打开SQL工具并直接调用指定功能"""
         try:
-            sql_tool = SqlQuick(self.root)
+            from .sql_quick import (
+                open_batch_query, 
+                open_sql_formatter,
+                open_geo_distance,
+                open_case_builder,
+                open_batch_insert
+            )
+            
             if feature_type == "sql_formatter":
-                sql_tool.sql_formatter()
+                open_sql_formatter(self.root)
             elif feature_type == "case_builder":
-                sql_tool.case_builder()
+                open_case_builder(self.root)
             elif feature_type == "geo_distance":
-                sql_tool.geo_distance()
+                open_geo_distance(self.root)
             elif feature_type == "batch_query":
-                sql_tool.batch_query()
+                open_batch_query(self.root)
             elif feature_type == "batch_insert":
-                sql_tool.batch_insert()
+                open_batch_insert(self.root)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开{feature_type}功能：{str(e)}")
 

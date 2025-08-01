@@ -7,7 +7,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
 from mypackage.gui_main import MainApplication
-from mypackage.user_auth import UserAuth
+#from mypackage.user_auth import UserAuth
 
 def disable_widget(widget):
     """递归禁用所有支持的控件"""
@@ -46,9 +46,9 @@ if __name__ == "__main__":
     root.update()
     
     # 禁用所有控件
-    disable_widget(root)
+    #disable_widget(root)
     
     # 创建认证窗口
-    auth = UserAuth(root, app)
+    #auth = UserAuth(root, app)
     
     root.mainloop()
