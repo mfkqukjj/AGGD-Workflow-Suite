@@ -11,6 +11,8 @@ from .fund_flow_analysis import FundFlowAnalysis
 from .about_viewer import AboutViewer
 from .file_split import FileSplitDialog
 from .file_format_convert import FileFormatConvertDialog
+from .file_tools import FileExplorerDialog, BatchRenameDialog
+
 
 class MainApplication:
     def __init__(self, root):
@@ -52,9 +54,8 @@ class MainApplication:
         frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         
         buttons = [
-            ("文件遍历", lambda: self.show_feature("待开发-读取文件名及结构")),
-            #("文件重命名-测试", lambda: self.open_file_operations("execute_rename")),
-            ("批量重命名", lambda: self.show_feature("待开发")),
+            ("文件遍历", lambda: FileExplorerDialog(self.root)),
+            ("批量重命名", lambda: BatchRenameDialog(self.root)),
             ("文件提取", lambda: self.show_feature("待开发")),
             ("格式转换", lambda: self.show_feature("待开发")),
             ("文件分切", self.open_file_split),
