@@ -284,77 +284,78 @@ FROM  """
             dialog.geometry("800x600")
             dialog.transient(self)
             dialog.grab_set()
-            
+
             # 保存对话框引用
             self.dialog = dialog
-            
+
             main_frame = ttk.Frame(dialog, padding="10")
             main_frame.pack(fill=tk.BOTH, expand=True)
-            
+
             # 格式化选项
             options_frame = ttk.LabelFrame(main_frame, text="格式化选项", padding="5")
             options_frame.pack(fill=tk.X, pady=(0, 10))
-            
+
             # 关键字大小写选择
             case_frame = ttk.Frame(options_frame)
             case_frame.pack(fill=tk.X, pady=5)
             ttk.Label(case_frame, text="关键字格式：").pack(side=tk.LEFT)
             case_var = tk.StringVar(value="upper")
-            ttk.Radiobutton(case_frame, text="大写", variable=case_var, 
-                           value="upper").pack(side=tk.LEFT, padx=10)
-            ttk.Radiobutton(case_frame, text="小写", variable=case_var, 
-                           value="lower").pack(side=tk.LEFT)
-            
+            ttk.Radiobutton(case_frame, text="大写", variable=case_var,
+                            value="upper").pack(side=tk.LEFT, padx=10)
+            ttk.Radiobutton(case_frame, text="小写", variable=case_var,
+                            value="lower").pack(side=tk.LEFT)
+
+            # 新增：注释替换原字段名
+            replace_comment_var = tk.BooleanVar(value=False)
+            ttk.Checkbutton(case_frame, text="注释替换原字段名", variable=replace_comment_var).pack(side=tk.LEFT, padx=10)
+
             # 缩进选项
             indent_frame = ttk.Frame(options_frame)
             indent_frame.pack(fill=tk.X, pady=5)
             ttk.Label(indent_frame, text="缩进空格数：").pack(side=tk.LEFT)
             indent_var = tk.StringVar(value="4")
             ttk.Entry(indent_frame, textvariable=indent_var, width=5).pack(side=tk.LEFT, padx=5)
-            
+
             # SQL输入区域
             input_frame = ttk.LabelFrame(main_frame, text="输入SQL", padding="5")
             input_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
             sql_input = scrolledtext.ScrolledText(input_frame, height=10, wrap=tk.WORD)
             sql_input.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-            
+
             # 解除默认的粘贴绑定
             sql_input.unbind('<Command-v>')
             sql_input.unbind('<<Paste>>')
-            
+
             # 重新绑定粘贴功能
             def custom_paste(event=None):
                 try:
-                    # 如果有选中的文本，先删除
                     try:
                         sql_input.delete("sel.first", "sel.last")
                     except tk.TclError:
                         pass
-                    # 获取剪贴板内容并插入
                     sql_input.insert(tk.INSERT, self.clipboard_get())
                 except Exception as e:
                     print(f"粘贴错误: {str(e)}")
                 return "break"
-            
-            # 只保留一个绑定
+
             sql_input.bind('<<Paste>>', custom_paste)
-            
+
             # 格式化结果区域
             result_frame = ttk.LabelFrame(main_frame, text="格式化结果", padding="5")
             result_frame.pack(fill=tk.BOTH, expand=True)
             result_output = scrolledtext.ScrolledText(result_frame, height=10, wrap=tk.WORD)
             result_output.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-            
+
             def format_sql():
                 try:
                     sql = sql_input.get("1.0", tk.END).strip()
                     if not sql:
                         messagebox.showwarning("警告", "请输入SQL语句！")
                         return
-                    
+
                     # 获取缩进空格数
                     indent_spaces = max(2, min(8, int(indent_var.get())))
-                    
+
                     # 格式化SQL
                     formatted_sql = sql_format(
                         sql,
@@ -365,48 +366,64 @@ FROM  """
                         comma_first=False,
                         use_space_around_operators=True
                     )
-                    
+
+                    # 注释替换原字段名
+                    if replace_comment_var.get():
+                        import re
+                        # 1. 找到SELECT ... FROM之间的内容（不区分大小写，支持多行）
+                        select_from_pattern = re.compile(r'(select\s+)(.*?)(\s+from\s)', re.IGNORECASE | re.DOTALL)
+                        def field_replacer(match):
+                            select_kw, fields_str, from_kw = match.groups()
+                            # 2. 只替换形如 字段名/**注释**/ 后紧跟逗号的
+                            def as_repl(m):
+                                field = m.group(1).strip()
+                                comment = m.group(2).strip()
+                                comma = m.group(3)
+                                if field != comment:
+                                    return f"{field} AS {comment}{comma}"
+                                else:
+                                    return f"{field}{comma}"
+                            # 只替换逗号前的注释
+                            field_pattern = re.compile(r'(\b\w+\b)\s*/\*\*([^*]+)\*\*/(\s*,)', re.DOTALL)
+                            new_fields_str = field_pattern.sub(as_repl, fields_str)
+                            return f"{select_kw}{new_fields_str}{from_kw}"
+                        formatted_sql = select_from_pattern.sub(field_replacer, formatted_sql)
+
                     # 显示结果
                     result_output.delete("1.0", tk.END)
                     result_output.insert(tk.END, formatted_sql)
-                    
+
                 except Exception as e:
                     messagebox.showerror("错误", f"格式化失败：{str(e)}")
-            
+
             # 按钮区域
             button_frame = ttk.Frame(main_frame)
             button_frame.pack(fill=tk.X, pady=10)
-            
+
             # 格式化按钮
-            ttk.Button(button_frame, 
-                      text="格式化", 
-                      command=format_sql
-                      ).pack(side=tk.LEFT, padx=5)
-            
+            ttk.Button(button_frame,
+                       text="格式化",
+                       command=format_sql
+                       ).pack(side=tk.LEFT, padx=5)
+
             # 清空按钮
-            ttk.Button(button_frame, 
-                      text="清空", 
-                      command=lambda: sql_input.delete("1.0", tk.END)
-                      ).pack(side=tk.LEFT)
-            
+            ttk.Button(button_frame,
+                       text="清空",
+                       command=lambda: sql_input.delete("1.0", tk.END)
+                       ).pack(side=tk.LEFT)
+
             # 复制结果按钮
-            ttk.Button(button_frame, 
-                      text="复制结果", 
-                      command=lambda: self.copy_result(result_output)
-                      ).pack(side=tk.LEFT, padx=5)
-            
+            ttk.Button(button_frame,
+                       text="复制结果",
+                       command=lambda: self.copy_result(result_output)
+                       ).pack(side=tk.LEFT, padx=5)
+
             # 添加窗口关闭处理
-            dialog.protocol("WM_DELETE_WINDOW", 
-                           lambda: self._close_formatter_dialog(dialog))
-            
+            dialog.protocol("WM_DELETE_WINDOW",
+                            lambda: self._close_formatter_dialog(dialog))
+
         except Exception as e:
             messagebox.showerror("错误", f"无法打开SQL格式化窗口：{str(e)}")
-
-    def _close_formatter_dialog(self, dialog):
-        """关闭格式化窗口"""
-        dialog.grab_release()
-        dialog.destroy()
-        self.status_var.set("SQL格式化窗口已关闭")
 
     def geo_distance(self):
         """经纬度距离计算功能"""
@@ -790,3 +807,12 @@ FROM  """
 
         except Exception as e:
             messagebox.showerror("错误", f"无法打开CASE WHEN生成器：{str(e)}")
+    
+    def _close_formatter_dialog(self, dialog):
+        """关闭格式化窗口并释放引用"""
+        try:
+            dialog.grab_release()
+        except Exception:
+            pass
+        dialog.destroy()
+        self.dialog = None
