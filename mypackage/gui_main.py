@@ -12,6 +12,7 @@ from .about_viewer import AboutViewer
 from .file_split import FileSplitDialog
 from .file_format_convert import FileFormatConvertDialog
 from .file_tools import FileExplorerDialog, BatchRenameDialog
+from .money_flow import MoneyFlowViewer
 
 
 class MainApplication:
@@ -90,7 +91,7 @@ class MainApplication:
             ("账户自析", lambda: self.show_feature("待开发")),
             ("抽佣分成", lambda: self.show_feature("待开发")),
             ("资金链条", lambda: self.show_feature("待开发")),
-            ("资金流向图", lambda: self.show_feature("待开发")),
+            ("流向图生成", lambda: MoneyFlowViewer(self.root)),
             ("报表生成", lambda: self.show_feature("待开发"))
         ]
         self.add_buttons_to_frame(frame, buttons)
