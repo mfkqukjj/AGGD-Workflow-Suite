@@ -37,8 +37,17 @@ class MoneyFlowViewer(tk.Toplevel):
         self.label_frame = ttk.LabelFrame(frm, text="链路备注内容（可多选）", padding=10)
         self.label_frame.pack(fill=tk.BOTH, expand=True, pady=10)
 
+        # 条件区
+        self.cond_frame = ttk.LabelFrame(frm, text="条件区", padding=10)
+        self.cond_frame.pack(fill=tk.X, pady=5)
+
         # 生成按钮
         ttk.Button(frm, text="生成流向图", command=self.generate_flow).pack(pady=10)
+
+        # 排除自身
+        self.exclude_self_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(self.cond_frame, text="排除流向自身", variable=self.exclude_self_var).grid(row=0, column=0, sticky="w")
+
 
     def load_file(self):
         filetypes = [("Excel/CSV", "*.xlsx *.xls *.csv"), ("所有文件", "*.*")]
@@ -119,6 +128,16 @@ class MoneyFlowViewer(tk.Toplevel):
         if self.df is None:
             messagebox.showerror("错误", "请先导入数据文件")
             return
+        df = self.df.copy()
+        # 条件过滤
+        
+        # 排除流向自身
+        if self.exclude_self_var.get():
+            node1 = self.node1_var.get()
+            node2 = self.node2_var.get()
+            df = df[df[node1] != df[node2]]
+        
+        # 后续生成elements逻辑同前
         node1 = self.node1_var.get()
         node2 = self.node2_var.get()
         if not node1 or not node2 or node1 == node2:
@@ -130,9 +149,9 @@ class MoneyFlowViewer(tk.Toplevel):
             return
 
         # 构造节点和边
-        nodes = set(self.df[node1].tolist() + self.df[node2].tolist())
+        nodes = set(df[node1].tolist() + df[node2].tolist())
         elements = [{'data': {'id': n, 'label': n}} for n in nodes]
-        for _, row in self.df.iterrows():
+        for _, row in df.iterrows():
             label = ", ".join([f"{f}:{row[f]}" for f in label_fields])
             elements.append({
                 'data': {
@@ -145,18 +164,33 @@ class MoneyFlowViewer(tk.Toplevel):
 
     def show_dash(self, elements):
         def run_dash():
+            import dash
+            from dash import html, dcc, Output, Input, State, callback_context
+            import dash_cytoscape as cyto
+
             app = dash.Dash(__name__)
+            # 初始参数
+            default_layout = {'name': 'breadthfirst'}
+            default_edge_style = 'bezier'
+            default_font_size = 16
+
             app.layout = html.Div([
+                html.Div([
+                    html.Button("一键重新分布", id="btn-layout", n_clicks=0, style={"marginRight": "10px"}),
+                    html.Button("切换链路样式", id="btn-style", n_clicks=0, style={"marginRight": "10px"}),
+                    html.Button("字体放大", id="btn-font-up", n_clicks=0, style={"marginRight": "10px"}),
+                    html.Button("字体缩小", id="btn-font-down", n_clicks=0),
+                ], style={"marginBottom": "10px"}),
                 cyto.Cytoscape(
                     id='cytoscape',
                     elements=elements,
-                    layout={'name': 'breadthfirst'},
+                    layout=default_layout,
                     style={'width': '100%', 'height': '600px'},
                     stylesheet=[
                         {
                             'selector': 'edge',
                             'style': {
-                                'curve-style': 'bezier',
+                                'curve-style': default_edge_style,
                                 'target-arrow-shape': 'triangle',
                                 'label': 'data(label)',
                                 'font-size': '12px'
@@ -166,12 +200,74 @@ class MoneyFlowViewer(tk.Toplevel):
                             'selector': 'node',
                             'style': {
                                 'label': 'data(label)',
-                                'font-size': '16px'
+                                'font-size': f'{default_font_size}px'
                             }
                         }
                     ]
                 )
             ])
+
+            # 状态变量
+            edge_styles = ['bezier', 'straight', 'taxi', 'unbundled-bezier', 'haystack']
+            layout_types = ['breadthfirst', 'circle', 'grid', 'cose', 'concentric']
+            font_size = [default_font_size]
+            edge_style_idx = [0]
+            layout_idx = [0]
+
+            @app.callback(
+                Output('cytoscape', 'layout'),
+                Input('btn-layout', 'n_clicks'),
+                prevent_initial_call=True
+            )
+            def update_layout(n_clicks):
+                layout_idx[0] = (layout_idx[0] + 1) % len(layout_types)
+                return {'name': layout_types[layout_idx[0]]}
+
+            @app.callback(
+                Output('cytoscape', 'stylesheet'),
+                Input('btn-style', 'n_clicks'),
+                Input('btn-font-up', 'n_clicks'),
+                Input('btn-font-down', 'n_clicks'),
+                State('cytoscape', 'stylesheet'),
+                prevent_initial_call=True
+            )
+            def update_style(n_style, n_up, n_down, stylesheet):
+                ctx = callback_context
+                if not ctx.triggered:
+                    raise dash.exceptions.PreventUpdate
+                btn_id = ctx.triggered[0]['prop_id'].split('.')[0]
+                # 当前样式
+                edge_style = edge_styles[edge_style_idx[0]]
+                node_font = font_size[0]
+                edge_font = 12
+                if btn_id == 'btn-style':
+                    edge_style_idx[0] = (edge_style_idx[0] + 1) % len(edge_styles)
+                    edge_style = edge_styles[edge_style_idx[0]]
+                elif btn_id == 'btn-font-up':
+                    font_size[0] = min(font_size[0] + 2, 40)
+                    node_font = font_size[0]
+                elif btn_id == 'btn-font-down':
+                    font_size[0] = max(font_size[0] - 2, 8)
+                    node_font = font_size[0]
+                return [
+                    {
+                        'selector': 'edge',
+                        'style': {
+                            'curve-style': edge_style,
+                            'target-arrow-shape': 'triangle',
+                            'label': 'data(label)',
+                            'font-size': f'{edge_font}px'
+                        }
+                    },
+                    {
+                        'selector': 'node',
+                        'style': {
+                            'label': 'data(label)',
+                            'font-size': f'{node_font}px'
+                        }
+                    }
+                ]
+
             threading.Timer(1.0, lambda: webbrowser.open("http://127.0.0.1:8050")).start()
             app.run(debug=False, port=8050, use_reloader=False)
         threading.Thread(target=run_dash, daemon=True).start()
