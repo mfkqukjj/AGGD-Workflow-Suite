@@ -8,7 +8,7 @@ import threading
 import webbrowser
 from dash.dependencies import Input, Output, State
 import json
-import networkx as nx  # 添加networkx库用于图分析
+import networkx as nx
 
 class MoneyFlowViewer(tk.Toplevel):
     def __init__(self, master):
@@ -239,6 +239,8 @@ class MoneyFlowViewer(tk.Toplevel):
             app.layout = html.Div([
                 html.Div([
                     html.Button("一键重新分布", id="btn-layout", n_clicks=0, style={"marginRight": "10px"}),
+                    # 新增的"切换布局样式"按钮
+                    html.Button("切换布局样式", id="btn-layout-style", n_clicks=0, style={"marginRight": "10px"}),
                     html.Button("切换链路样式", id="btn-style", n_clicks=0, style={"marginRight": "10px"}),
                     html.Button("字体放大", id="btn-font-up", n_clicks=0, style={"marginRight": "10px"}),
                     html.Button("字体缩小", id="btn-font-down", n_clicks=0, style={"marginRight": "10px"}),
@@ -376,10 +378,11 @@ class MoneyFlowViewer(tk.Toplevel):
 
             # 状态变量
             edge_styles = ['bezier', 'straight', 'taxi', 'unbundled-bezier', 'haystack']
-            layout_types = ['breadthfirst', 'circle', 'grid', 'cose', 'concentric']
+            layout_types = ['breadthfirst', 'circle', 'grid', 'cose', 'concentric', 'random']  # 增加random布局
             font_size = [default_font_size]
             edge_style_idx = [0]
-            layout_idx = [0]
+            layout_idx = [0]  # 用于"一键重新分布"的布局索引
+            layout_style_idx = [0]  # 用于"切换布局样式"的新布局索引
             edge_width = [default_edge_width]  # 线条粗细状态
             edge_color = [default_edge_color]   # 线条颜色状态
             font_color = [default_font_color]   # 字体颜色状态
@@ -392,7 +395,31 @@ class MoneyFlowViewer(tk.Toplevel):
             )
             def update_layout(n_clicks):
                 layout_idx[0] = (layout_idx[0] + 1) % len(layout_types)
-                return {'name': layout_types[layout_idx[0]]}
+                return {
+                    'name': layout_types[layout_idx[0]],
+                    'animate': True,  # 启用动画
+                    'animationDuration': 500  # 动画持续时间500ms
+                }
+
+            # 新增的布局样式切换回调
+            @app.callback(
+                Output('cytoscape', 'layout', allow_duplicate=True),
+                Input('btn-layout-style', 'n_clicks'),
+                prevent_initial_call=True
+            )
+            def update_layout_style(n_clicks):
+                # 循环切换布局类型
+                layout_style_idx[0] = (layout_style_idx[0] + 1) % len(layout_types)
+                new_layout = layout_types[layout_style_idx[0]]
+                
+                # 添加动画效果（平滑过渡）
+                return {
+                    'name': new_layout,
+                    'animate': True,  # 启用动画
+                    'animationDuration': 500,  # 动画持续时间500ms
+                    'fit': True,  # 自动适应视图
+                    'padding': 30  # 布局内边距
+                }
 
             @app.callback(
                 Output('cytoscape', 'stylesheet'),
@@ -443,133 +470,83 @@ class MoneyFlowViewer(tk.Toplevel):
                 
                 # 颜色更新
                 elif btn_id == 'edge-color-picker':
-                    # 验证颜色值格式
-                    if edge_color_value.startswith('#') and len(edge_color_value) in [4, 7]:
-                        try:
-                            edge_color[0] = edge_color_value
-                            updated = True
-                        except:
-                            pass
-                
-                # 字体颜色更新
+                    edge_color[0] = edge_color_value
+                    updated = True
                 elif btn_id == 'font-color-picker':
-                    if font_color_value.startswith('#') and len(font_color_value) in [4, 7]:
-                        try:
-                            font_color[0] = font_color_value
-                            updated = True
-                        except:
-                            pass
-                
-                # 节点颜色更新
+                    font_color[0] = font_color_value
+                    updated = True
                 elif btn_id == 'node-color-picker':
-                    if node_color_value.startswith('#') and len(node_color_value) in [4, 7]:
-                        try:
-                            node_color[0] = node_color_value
-                            updated = True
-                        except:
-                            pass
-            
+                    node_color[0] = node_color_value
+                    updated = True
+                
                 if updated:
-                    # 更新样式表
-                    new_stylesheet = [
-                        {
-                            'selector': 'edge',
-                            'style': {
-                                'curve-style': edge_styles[edge_style_idx[0]],
-                                'target-arrow-shape': 'triangle',
-                                'label': 'data(label)',
-                                'font-size': f'{font_size[0]-4}px',  # 边标签字体比节点小4px
-                                'width': edge_width[0],
-                                'line-color': edge_color[0],
-                                'color': font_color[0]  # 边标签字体颜色
-                            }
-                        },
-                        {
-                            'selector': 'node',
-                            'style': {
-                                'label': 'data(label)',
-                                'font-size': f'{font_size[0]}px',
-                                'background-color': node_color[0],  # 节点颜色
-                                'color': font_color[0]  # 节点标签字体颜色
-                            }
-                        }
-                    ]
-                    return new_stylesheet
-                
-                return stylesheet
-
-            # 颜色预览更新
-            @app.callback(
-                Output('edge-color-preview', 'style'),
-                Input('edge-color-picker', 'value')
-            )
-            def update_edge_color_preview(color_value):
-                return {'background': color_value, 'width': '30px', 'height': '20px', 
-                        'display': 'inline-block', 'border': '1px solid #000', 'verticalAlign': 'middle'}
-
-            @app.callback(
-                Output('font-color-preview', 'style'),
-                Input('font-color-picker', 'value')
-            )
-            def update_font_color_preview(color_value):
-                return {'background': color_value, 'width': '30px', 'height': '20px', 
-                        'display': 'inline-block', 'border': '1px solid #000', 'verticalAlign': 'middle'}
-
-            @app.callback(
-                Output('node-color-preview', 'style'),
-                Input('node-color-picker', 'value')
-            )
-            def update_node_color_preview(color_value):
-                return {'background': color_value, 'width': '30px', 'height': '20px', 
-                        'display': 'inline-block', 'border': '1px solid #000', 'verticalAlign': 'middle'}
-            
-            # 复制图表信息功能
-            @app.callback(
-                Output('cytoscape-copy', 'content'),
-                Input('cytoscape-copy', 'n_clicks'),
-                State('cytoscape', 'elements')
-            )
-            def copy_cytoscape_data(n_clicks, elements):
-                if n_clicks is None:
-                    return dash.no_update
-                
-                # 将图表数据转换为易读的JSON格式
-                try:
-                    formatted_data = []
-                    for element in elements:
-                        if 'source' in element['data']:
-                            # 边元素
-                            formatted_data.append({
-                                "类型": "边",
-                                "来源": element['data']['source'],
-                                "目标": element['data']['target'],
-                                "标签": element['data'].get('label', '')
-                            })
-                        else:
-                            # 节点元素
-                            formatted_data.append({
-                                "类型": "节点",
-                                "ID": element['data']['id'],
-                                "标签": element['data'].get('label', '')
-                            })
+                    # 更新节点样式
+                    for style in stylesheet:
+                        if style['selector'] == 'node':
+                            style['style']['font-size'] = f'{font_size[0]}px'
+                            style['style']['color'] = font_color[0]
+                            style['style']['background-color'] = node_color[0]
                     
-                    # 转换为格式化的JSON字符串
-                    return json.dumps(formatted_data, indent=2, ensure_ascii=False)
-                except Exception as e:
-                    return f"复制出错: {str(e)}"
-            
-            # 新增回调：链路组数筛选
-            app.callback(
-                [Output('cytoscape', 'elements'),
-                 Output('original-elements-store', 'data')],
-                [Input('run-filter-btn', 'n_clicks'),
-                 Input('reset-btn', 'n_clicks')],
-                [State('component-limit-input', 'value'),
-                 State('original-elements-store', 'data'),
-                 State('cytoscape', 'elements')]
-            )(filter_components)
+                    # 更新边样式
+                    for style in stylesheet:
+                        if style['selector'] == 'edge':
+                            style['style']['curve-style'] = edge_styles[edge_style_idx[0]]
+                            style['style']['width'] = edge_width[0]
+                            style['style']['line-color'] = edge_color[0]
+                            style['style']['color'] = font_color[0]
+                
+                updated_stylesheet = stylesheet.copy()
+                return updated_stylesheet
 
-            threading.Timer(1.0, lambda: webbrowser.open("http://127.0.0.1:8050")).start()
-            app.run(debug=False, port=8050, use_reloader=False)
+            @app.callback(
+                [Output('cytoscape', 'elements'), Output('original-elements-store', 'data')],
+                [Input('run-filter-btn', 'n_clicks'), Input('reset-btn', 'n_clicks')],
+                [State('component-limit-input', 'value'), 
+                 State('original-elements-store', 'data'),
+                 State('cytoscape', 'elements')],
+                prevent_initial_call=True
+            )
+            def update_elements(run_clicks, reset_clicks, n_value, stored_elements, current_elements):
+                return filter_components(run_clicks, reset_clicks, n_value, stored_elements, current_elements)
+
+            @app.callback(
+                [Output('edge-color-preview', 'style'), 
+                 Output('font-color-preview', 'style'),
+                 Output('node-color-preview', 'style')],
+                [Input('edge-color-picker', 'value'),
+                 Input('font-color-picker', 'value'),
+                 Input('node-color-picker', 'value')]
+            )
+            def update_color_previews(edge_color, font_color, node_color):
+                edge_style = {
+                    'width': '30px',
+                    'height': '20px',
+                    'background': edge_color,
+                    'display': 'inline-block',
+                    'border': '1px solid #000',
+                    'verticalAlign': 'middle'
+                }
+                font_style = {
+                    'width': '30px',
+                    'height': '20px',
+                    'background': font_color,
+                    'display': 'inline-block',
+                    'border': '1px solid #000',
+                    'verticalAlign': 'middle'
+                }
+                node_style = {
+                    'width': '30px',
+                    'height': '20px',
+                    'background': node_color,
+                    'display': 'inline-block',
+                    'border': '1px solid #000',
+                    'verticalAlign': 'middle'
+                }
+                return edge_style, font_style, node_style
+
+            app.run(debug=False)
+
+        # 在新线程中运行Dash应用
         threading.Thread(target=run_dash, daemon=True).start()
-        messagebox.showinfo("提示", "流向图将在浏览器中打开！")
+        webbrowser.open_new_tab('http://127.0.0.1:8050/')
+
