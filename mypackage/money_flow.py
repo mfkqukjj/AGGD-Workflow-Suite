@@ -2,10 +2,12 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 import dash
-from dash import html
+from dash import html, dcc
 import dash_cytoscape as cyto
 import threading
 import webbrowser
+from dash.dependencies import Input, Output, State
+import json
 
 class MoneyFlowViewer(tk.Toplevel):
     def __init__(self, master):
@@ -48,7 +50,6 @@ class MoneyFlowViewer(tk.Toplevel):
         self.exclude_self_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(self.cond_frame, text="排除流向自身", variable=self.exclude_self_var).grid(row=0, column=0, sticky="w")
 
-
     def load_file(self):
         filetypes = [("Excel/CSV", "*.xlsx *.xls *.csv"), ("所有文件", "*.*")]
         filename = filedialog.askopenfilename(title="选择数据文件", filetypes=filetypes)
@@ -80,7 +81,7 @@ class MoneyFlowViewer(tk.Toplevel):
             return
 
         # 节点字段选择
-        ttk.Label(self.fields_frame, text="节点字段1（起点").grid(row=0, column=0, sticky="w")
+        ttk.Label(self.fields_frame, text="节点字段1（起点）：").grid(row=0, column=0, sticky="w")
         node1_cb = ttk.Combobox(self.fields_frame, values=columns, textvariable=self.node1_var, state="readonly")
         node1_cb.grid(row=0, column=1, padx=5)
         node1_cb.current(0)
@@ -168,19 +169,108 @@ class MoneyFlowViewer(tk.Toplevel):
             from dash import html, dcc, Output, Input, State, callback_context
             import dash_cytoscape as cyto
 
-            app = dash.Dash(__name__)
+            app = dash.Dash()
             # 初始参数
             default_layout = {'name': 'breadthfirst'}
             default_edge_style = 'bezier'
             default_font_size = 16
+            default_edge_width = 2
+            default_edge_color = '#888'  # 默认线条颜色
+            default_font_color = '#000'  # 默认字体颜色
+            default_node_color = '#000'  # 默认节点颜色
 
             app.layout = html.Div([
                 html.Div([
                     html.Button("一键重新分布", id="btn-layout", n_clicks=0, style={"marginRight": "10px"}),
                     html.Button("切换链路样式", id="btn-style", n_clicks=0, style={"marginRight": "10px"}),
                     html.Button("字体放大", id="btn-font-up", n_clicks=0, style={"marginRight": "10px"}),
-                    html.Button("字体缩小", id="btn-font-down", n_clicks=0),
+                    html.Button("字体缩小", id="btn-font-down", n_clicks=0, style={"marginRight": "10px"}),
+                    # 复制按钮
+                    dcc.Clipboard(
+                        id="cytoscape-copy",
+                        title="复制图表信息",
+                        style={
+                            "display": "inline-block",
+                            "fontSize": 20,
+                            "verticalAlign": "top",
+                            "cursor": "pointer",
+                            "marginRight": "10px"
+                        }
+                    ),
+                    # 新增按钮
+                    html.Button("线条加粗", id="btn-line-thicker", n_clicks=0, style={"marginRight": "10px"}),
+                    html.Button("线条变细", id="btn-line-thinner", n_clicks=0, style={"marginRight": "10px"}),
+                ], style={"marginBottom": "10px", "display": "flex", "flexWrap": "wrap", "alignItems": "center"}),
+                
+                # 颜色控制区域
+                html.Div([
+                    # 线条颜色
+                    html.Div([
+                        html.Label("线条颜色: ", style={'marginRight': '5px'}),
+                        dcc.Input(
+                            id='edge-color-picker',
+                            type='text',
+                            value=default_edge_color,
+                            style={'width': '80px', 'marginRight': '10px'}
+                        ),
+                        html.Div(
+                            id='edge-color-preview',
+                            style={
+                                'width': '30px',
+                                'height': '20px',
+                                'background': default_edge_color,
+                                'display': 'inline-block',
+                                'border': '1px solid #000',
+                                'verticalAlign': 'middle'
+                            }
+                        )
+                    ], style={'display': 'inline-block', 'verticalAlign': 'middle', 'marginRight': '20px'}),
+                    
+                    # 字体颜色
+                    html.Div([
+                        html.Label("字体颜色: ", style={'marginRight': '5px'}),
+                        dcc.Input(
+                            id='font-color-picker',
+                            type='text',
+                            value=default_font_color,
+                            style={'width': '80px', 'marginRight': '10px'}
+                        ),
+                        html.Div(
+                            id='font-color-preview',
+                            style={
+                                'width': '30px',
+                                'height': '20px',
+                                'background': default_font_color,
+                                'display': 'inline-block',
+                                'border': '1px solid #000',
+                                'verticalAlign': 'middle'
+                            }
+                        )
+                    ], style={'display': 'inline-block', 'verticalAlign': 'middle', 'marginRight': '20px'}),
+                    
+                    # 节点颜色
+                    html.Div([
+                        html.Label("节点颜色: ", style={'marginRight': '5px'}),
+                        dcc.Input(
+                            id='node-color-picker',
+                            type='text',
+                            value=default_node_color,
+                            style={'width': '80px', 'marginRight': '10px'}
+                        ),
+                        html.Div(
+                            id='node-color-preview',
+                            style={
+                                'width': '30px',
+                                'height': '20px',
+                                'background': default_node_color,
+                                'display': 'inline-block',
+                                'border': '1px solid #000',
+                                'verticalAlign': 'middle'
+                            }
+                        )
+                    ], style={'display': 'inline-block', 'verticalAlign': 'middle'})
                 ], style={"marginBottom": "10px"}),
+                
                 cyto.Cytoscape(
                     id='cytoscape',
                     elements=elements,
@@ -193,14 +283,19 @@ class MoneyFlowViewer(tk.Toplevel):
                                 'curve-style': default_edge_style,
                                 'target-arrow-shape': 'triangle',
                                 'label': 'data(label)',
-                                'font-size': '12px'
+                                'font-size': '12px',
+                                'width': default_edge_width,
+                                'line-color': default_edge_color,
+                                'color': default_font_color  # 边标签字体颜色
                             }
                         },
                         {
                             'selector': 'node',
                             'style': {
                                 'label': 'data(label)',
-                                'font-size': f'{default_font_size}px'
+                                'font-size': f'{default_font_size}px',
+                                'background-color': default_node_color,  # 节点背景色
+                                'color': default_font_color  # 节点标签字体颜色
                             }
                         }
                     ]
@@ -213,6 +308,10 @@ class MoneyFlowViewer(tk.Toplevel):
             font_size = [default_font_size]
             edge_style_idx = [0]
             layout_idx = [0]
+            edge_width = [default_edge_width]  # 线条粗细状态
+            edge_color = [default_edge_color]   # 线条颜色状态
+            font_color = [default_font_color]   # 字体颜色状态
+            node_color = [default_node_color]   # 节点颜色状态
 
             @app.callback(
                 Output('cytoscape', 'layout'),
@@ -228,45 +327,164 @@ class MoneyFlowViewer(tk.Toplevel):
                 Input('btn-style', 'n_clicks'),
                 Input('btn-font-up', 'n_clicks'),
                 Input('btn-font-down', 'n_clicks'),
+                Input('btn-line-thicker', 'n_clicks'),
+                Input('btn-line-thinner', 'n_clicks'),
+                Input('edge-color-picker', 'value'),
+                Input('font-color-picker', 'value'),
+                Input('node-color-picker', 'value'),
                 State('cytoscape', 'stylesheet'),
                 prevent_initial_call=True
             )
-            def update_style(n_style, n_up, n_down, stylesheet):
+            def update_style(n_style, n_up, n_down, n_thicker, n_thinner, 
+                            edge_color_value, font_color_value, node_color_value, stylesheet):
                 ctx = callback_context
                 if not ctx.triggered:
-                    raise dash.exceptions.PreventUpdate
+                    return stylesheet
+                
                 btn_id = ctx.triggered[0]['prop_id'].split('.')[0]
-                # 当前样式
-                edge_style = edge_styles[edge_style_idx[0]]
-                node_font = font_size[0]
-                edge_font = 12
+                updated = False
+                
+                # 切换链路样式
                 if btn_id == 'btn-style':
                     edge_style_idx[0] = (edge_style_idx[0] + 1) % len(edge_styles)
-                    edge_style = edge_styles[edge_style_idx[0]]
+                    updated = True
+                
+                # 字体放大
                 elif btn_id == 'btn-font-up':
                     font_size[0] = min(font_size[0] + 2, 40)
-                    node_font = font_size[0]
+                    updated = True
+                
+                # 字体缩小
                 elif btn_id == 'btn-font-down':
                     font_size[0] = max(font_size[0] - 2, 8)
-                    node_font = font_size[0]
-                return [
-                    {
-                        'selector': 'edge',
-                        'style': {
-                            'curve-style': edge_style,
-                            'target-arrow-shape': 'triangle',
-                            'label': 'data(label)',
-                            'font-size': f'{edge_font}px'
+                    updated = True
+                
+                # 线条加粗
+                elif btn_id == 'btn-line-thicker':
+                    edge_width[0] = min(edge_width[0] + 1, 10)  # 最大宽度为10
+                    updated = True
+                
+                # 线条变细
+                elif btn_id == 'btn-line-thinner':
+                    edge_width[0] = max(edge_width[0] - 1, 1)  # 最小宽度为1
+                    updated = True
+                
+                # 颜色更新
+                elif btn_id == 'edge-color-picker':
+                    # 验证颜色值格式
+                    if edge_color_value.startswith('#') and len(edge_color_value) in [4, 7]:
+                        try:
+                            edge_color[0] = edge_color_value
+                            updated = True
+                        except:
+                            pass
+                
+                # 字体颜色更新
+                elif btn_id == 'font-color-picker':
+                    if font_color_value.startswith('#') and len(font_color_value) in [4, 7]:
+                        try:
+                            font_color[0] = font_color_value
+                            updated = True
+                        except:
+                            pass
+                
+                # 节点颜色更新
+                elif btn_id == 'node-color-picker':
+                    if node_color_value.startswith('#') and len(node_color_value) in [4, 7]:
+                        try:
+                            node_color[0] = node_color_value
+                            updated = True
+                        except:
+                            pass
+            
+                if updated:
+                    # 更新样式表
+                    new_stylesheet = [
+                        {
+                            'selector': 'edge',
+                            'style': {
+                                'curve-style': edge_styles[edge_style_idx[0]],
+                                'target-arrow-shape': 'triangle',
+                                'label': 'data(label)',
+                                'font-size': f'{font_size[0]-4}px',  # 边标签字体比节点小4px
+                                'width': edge_width[0],
+                                'line-color': edge_color[0],
+                                'color': font_color[0]  # 边标签字体颜色
+                            }
+                        },
+                        {
+                            'selector': 'node',
+                            'style': {
+                                'label': 'data(label)',
+                                'font-size': f'{font_size[0]}px',
+                                'background-color': node_color[0],  # 节点颜色
+                                'color': font_color[0]  # 节点标签字体颜色
+                            }
                         }
-                    },
-                    {
-                        'selector': 'node',
-                        'style': {
-                            'label': 'data(label)',
-                            'font-size': f'{node_font}px'
-                        }
-                    }
-                ]
+                    ]
+                    return new_stylesheet
+                
+                return stylesheet
+
+            # 颜色预览更新
+            @app.callback(
+                Output('edge-color-preview', 'style'),
+                Input('edge-color-picker', 'value')
+            )
+            def update_edge_color_preview(color_value):
+                return {'background': color_value, 'width': '30px', 'height': '20px', 
+                        'display': 'inline-block', 'border': '1px solid #000', 'verticalAlign': 'middle'}
+
+            @app.callback(
+                Output('font-color-preview', 'style'),
+                Input('font-color-picker', 'value')
+            )
+            def update_font_color_preview(color_value):
+                return {'background': color_value, 'width': '30px', 'height': '20px', 
+                        'display': 'inline-block', 'border': '1px solid #000', 'verticalAlign': 'middle'}
+
+            @app.callback(
+                Output('node-color-preview', 'style'),
+                Input('node-color-picker', 'value')
+            )
+            def update_node_color_preview(color_value):
+                return {'background': color_value, 'width': '30px', 'height': '20px', 
+                        'display': 'inline-block', 'border': '1px solid #000', 'verticalAlign': 'middle'}
+            
+            # 复制图表信息功能
+            @app.callback(
+                Output('cytoscape-copy', 'content'),
+                Input('cytoscape-copy', 'n_clicks'),
+                State('cytoscape', 'elements')
+            )
+            def copy_cytoscape_data(n_clicks, elements):
+                if n_clicks is None:
+                    return dash.no_update
+                
+                # 将图表数据转换为易读的JSON格式
+                try:
+                    formatted_data = []
+                    for element in elements:
+                        if 'source' in element['data']:
+                            # 边元素
+                            formatted_data.append({
+                                "类型": "边",
+                                "来源": element['data']['source'],
+                                "目标": element['data']['target'],
+                                "标签": element['data'].get('label', '')
+                            })
+                        else:
+                            # 节点元素
+                            formatted_data.append({
+                                "类型": "节点",
+                                "ID": element['data']['id'],
+                                "标签": element['data'].get('label', '')
+                            })
+                    
+                    # 转换为格式化的JSON字符串
+                    return json.dumps(formatted_data, indent=2, ensure_ascii=False)
+                except Exception as e:
+                    return f"复制出错: {str(e)}"
 
             threading.Timer(1.0, lambda: webbrowser.open("http://127.0.0.1:8050")).start()
             app.run(debug=False, port=8050, use_reloader=False)
