@@ -8,6 +8,7 @@ import threading
 import webbrowser
 from dash.dependencies import Input, Output, State
 import json
+import networkx as nx  # 添加networkx库用于图分析
 
 class MoneyFlowViewer(tk.Toplevel):
     def __init__(self, master):
@@ -165,6 +166,62 @@ class MoneyFlowViewer(tk.Toplevel):
 
     def show_dash(self, elements):
         def run_dash():
+            def filter_components(run_clicks, reset_clicks, n_value, stored_elements, current_elements):
+                ctx = dash.callback_context
+                if not ctx.triggered:
+                    return dash.no_update, dash.no_update
+                
+                trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+                
+                # 重置逻辑
+                if trigger_id == 'reset-btn':
+                    return stored_elements, stored_elements
+                
+                # 筛选逻辑
+                if trigger_id == 'run-filter-btn' and n_value:
+                    # 创建图结构
+                    G = nx.Graph()
+                    node_map = {}
+                    
+                    # 添加节点和边
+                    for elem in stored_elements:
+                        if 'source' in elem['data']:  # 边
+                            source = elem['data']['source']
+                            target = elem['data']['target']
+                            G.add_edge(source, target)
+                        else:  # 节点
+                            node_id = elem['data']['id']
+                            G.add_node(node_id)
+                            node_map[node_id] = elem
+                    
+                    # 获取连通子图并排序
+                    components = list(nx.connected_components(G))
+                    sorted_components = sorted(components, 
+                                            key=lambda x: len(x), 
+                                            reverse=True)[:int(n_value)]
+                    
+                    # 构建新元素集
+                    new_elements = []
+                    selected_nodes = set()
+                    
+                    # 添加选中的节点
+                    for comp in sorted_components:
+                        selected_nodes.update(comp)
+                        for node in comp:
+                            new_elements.append(node_map[node])
+                    
+                    # 添加关联的边
+                    for elem in stored_elements:
+                        if 'source' in elem['data']:
+                            source = elem['data']['source']
+                            target = elem['data']['target']
+                            if source in selected_nodes and target in selected_nodes:
+                                new_elements.append(elem)
+                    
+                    return new_elements, stored_elements
+                
+                return current_elements, stored_elements
+
             import dash
             from dash import html, dcc, Output, Input, State, callback_context
             import dash_cytoscape as cyto
@@ -201,6 +258,21 @@ class MoneyFlowViewer(tk.Toplevel):
                     html.Button("线条加粗", id="btn-line-thicker", n_clicks=0, style={"marginRight": "10px"}),
                     html.Button("线条变细", id="btn-line-thinner", n_clicks=0, style={"marginRight": "10px"}),
                 ], style={"marginBottom": "10px", "display": "flex", "flexWrap": "wrap", "alignItems": "center"}),
+                
+                # 新增组件：链路组数筛选
+                html.Div([
+                    dcc.Input(
+                        id='component-limit-input',
+                        type='number',
+                        min=1,
+                        placeholder='限定链路数量（按长度）',
+                        style={'width': '180px', 'marginRight': '10px'}
+                    ),
+                    html.Button('运行', id='run-filter-btn', n_clicks=0, style={'marginRight': '10px'}),
+                    html.Button('重置', id='reset-btn', n_clicks=0)
+                ], style={'marginBottom': '10px'}),
+                
+                dcc.Store(id='original-elements-store', data=elements),  # 存储原始数据
                 
                 # 颜色控制区域
                 html.Div([
@@ -485,6 +557,17 @@ class MoneyFlowViewer(tk.Toplevel):
                     return json.dumps(formatted_data, indent=2, ensure_ascii=False)
                 except Exception as e:
                     return f"复制出错: {str(e)}"
+            
+            # 新增回调：链路组数筛选
+            app.callback(
+                [Output('cytoscape', 'elements'),
+                 Output('original-elements-store', 'data')],
+                [Input('run-filter-btn', 'n_clicks'),
+                 Input('reset-btn', 'n_clicks')],
+                [State('component-limit-input', 'value'),
+                 State('original-elements-store', 'data'),
+                 State('cytoscape', 'elements')]
+            )(filter_components)
 
             threading.Timer(1.0, lambda: webbrowser.open("http://127.0.0.1:8050")).start()
             app.run(debug=False, port=8050, use_reloader=False)
