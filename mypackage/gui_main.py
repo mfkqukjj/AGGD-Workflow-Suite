@@ -14,7 +14,7 @@ from .file_format_convert import FileFormatConvertDialog
 from .file_tools import FileExplorerDialog, BatchRenameDialog
 from .money_flow import MoneyFlowViewer
 from .file_batch_extract import BatchExtractTool 
-
+from .tx_registration_merger import RegistrationMerger 
 
 class MainApplication:
     def __init__(self, root):
@@ -82,7 +82,7 @@ class MainApplication:
             ("表间关联", self.open_table_join),  
             ("数据格式转换", self.open_file_format_convert),
             ("数据可视化", lambda: self.show_feature("数据可视化")),
-            ("数据导出", lambda: self.show_feature("数据导出"))
+            ("txt纵表转结构化", self.open_registration_merger) 
         ]
         self.add_buttons_to_frame(frame, buttons)
 
@@ -300,6 +300,12 @@ class MainApplication:
         except Exception as e:
             messagebox.showerror("错误", f"无法打开资金流向分析工具：{str(e)}")
 
+    def open_registration_merger(self):
+        """打开注册信息合并工具"""
+        try:
+            RegistrationMerger(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开注册信息合并工具：{str(e)}")
 
 class SqlFeatures:
     def create_dialog(self, title, size="600x500"):
