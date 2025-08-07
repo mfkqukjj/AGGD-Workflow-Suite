@@ -15,6 +15,9 @@ requests>=2.31.0  # HTTP请求处理
 dash>=2.9.0  # 资金流向可视化
 dash-cytoscape>=0.3.0  # 关系图展示
 
+# 图结构分析
+networkx>=2.8.0
+
 # SQL处理
 sqlparse>=0.4.4  # SQL格式化
 

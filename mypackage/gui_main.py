@@ -13,6 +13,7 @@ from .file_split import FileSplitDialog
 from .file_format_convert import FileFormatConvertDialog
 from .file_tools import FileExplorerDialog, BatchRenameDialog
 from .money_flow import MoneyFlowViewer
+from .file_batch_extract import BatchExtractTool 
 
 
 class MainApplication:
@@ -57,13 +58,19 @@ class MainApplication:
         buttons = [
             ("文件遍历", lambda: FileExplorerDialog(self.root)),
             ("批量重命名", lambda: BatchRenameDialog(self.root)),
-            ("文件提取", lambda: self.show_feature("待开发")),
+            ("文件提取", self.open_batch_extract),
             ("格式转换", lambda: self.show_feature("待开发")),
             ("文件分切", self.open_file_split),
-            ("批量文件操作", self.open_file_operations)
+            ("其他功能", lambda: self.show_text("其他功能开发中"))
         ]
         self.add_buttons_to_frame(frame, buttons, "3x2")  # 使用3x2布局
 
+    # 添加批量提取工具打开方法
+    def open_batch_extract(self):
+        """打开批量文件提取工具"""
+        BatchExtractTool(self.root)
+    
+    # 以下代码保持不变...
     def create_data_group(self):
         """数据处理功能组"""
         frame = self.create_group_frame(self.main_frame, "数据处理")
@@ -131,7 +138,7 @@ class MainApplication:
         buttons = [
             ("系统设置", lambda: self.show_feature("系统设置")),
             ("使用帮助", lambda: self.show_feature("帮助中心")),
-            ("授权管理", lambda: self.show_feature("授权管理：临时使用可联系281303")),
+            ("授权管理", lambda: self.show_text("授权管理：临时使用可联系281303")),
             ("关于我们", self.show_about)
         ]
         self.add_buttons_to_frame(frame, buttons)
@@ -172,7 +179,6 @@ class MainApplication:
                 )
                 btn.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
 
-
     def show_feature(self, feature_name):
         """默认功能演示窗口（供后续替换）"""
         popup = tk.Toplevel(self.root)
@@ -185,6 +191,19 @@ class MainApplication:
                  font=('微软雅黑', 14)).pack(pady=10)
         ttk.Label(content, text="后续可以在此处添加实际功能代码",
                  font=('微软雅黑', 10)).pack()
+        ttk.Button(content, text="关闭", command=popup.destroy).pack(pady=15)
+
+    def show_text(self, feature_name):
+        """默认功能演示窗口（供后续替换）"""
+        popup = tk.Toplevel(self.root)
+        popup.title("说明")
+
+        content = ttk.Frame(popup, padding=20)
+        content.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(content, text=f"{feature_name}",
+                 font=('微软雅黑', 12)).pack(pady=10)
+
         ttk.Button(content, text="关闭", command=popup.destroy).pack(pady=15)
 
     def open_data_merge(self):
@@ -204,7 +223,6 @@ class MainApplication:
             TableBankSplitter(self.root)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开财务表格分表工具：{str(e)}")
-
 
     def open_batch_gen(self):
         """打开一人一档生成工具"""
@@ -292,5 +310,3 @@ class SqlFeatures:
         dialog.transient(self.master)
         dialog.grab_set()
         return dialog
-
-

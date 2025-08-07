@@ -369,25 +369,22 @@ FROM  """
 
                     # 注释替换原字段名
                     if replace_comment_var.get():
-                        import re
-                        # 1. 找到SELECT ... FROM之间的内容（不区分大小写，支持多行）
-                        select_from_pattern = re.compile(r'(select\s+)(.*?)(\s+from\s)', re.IGNORECASE | re.DOTALL)
-                        def field_replacer(match):
-                            select_kw, fields_str, from_kw = match.groups()
-                            # 2. 只替换形如 字段名/**注释**/ 后紧跟逗号的
-                            def as_repl(m):
-                                field = m.group(1).strip()
-                                comment = m.group(2).strip()
-                                comma = m.group(3)
-                                if field != comment:
-                                    return f"{field} AS {comment}{comma}"
-                                else:
-                                    return f"{field}{comma}"
-                            # 只替换逗号前的注释
-                            field_pattern = re.compile(r'(\b\w+\b)\s*/\*\*([^*]+)\*\*/(\s*,)', re.DOTALL)
-                            new_fields_str = field_pattern.sub(as_repl, fields_str)
-                            return f"{select_kw}{new_fields_str}{from_kw}"
-                        formatted_sql = select_from_pattern.sub(field_replacer, formatted_sql)
+                        # 优化后的注释替换逻辑
+                        def replace_comment(match):
+                            field_name = match.group(1).strip()
+                            comment = match.group(2).strip()
+                            # 保留原始缩进
+                            indent = match.group(0).split(field_name)[0]
+                            return f"{indent}{field_name} AS {comment}"
+                        
+                        # 匹配格式: 字段名 /** 注释内容 **/
+                        pattern = r'(\b\w+\b)\s*/\*\*([^*]+)\*\*/'
+                        formatted_sql = re.sub(
+                            pattern, 
+                            replace_comment, 
+                            formatted_sql,
+                            flags=re.DOTALL
+                        )
 
                     # 显示结果
                     result_output.delete("1.0", tk.END)
