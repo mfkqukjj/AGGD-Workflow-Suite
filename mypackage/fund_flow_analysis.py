@@ -16,17 +16,21 @@ class FundFlowAnalysis:
         self.files_selected = []
         self.df = None
         self.required_columns = [
-            '查询账号', '付款方支付帐号', '收款方支付帐号', '支付机构内部订单号',
+            '查询账号', '付款方支付账号', '收款方支付账号', '支付机构内部订单号',
             '交易时间', '借贷标志', '交易金额', '交易余额', '付款方银行卡号',
             '收款方银行卡号', '交易类型', '收款方的商户名称', '备注'
         ]
+        
+        # 添加去重相关变量
+        self.deduplicate_var = tk.StringVar(value="否")  # 默认不去重
+        self.deduplicate_method_var = tk.StringVar(value="根据【流水号】去重")  # 默认去重方法
         
         self.create_main_window()
 
     def create_main_window(self):
         """创建主窗口"""
         self.window = tk.Toplevel(self.master)
-        self.window.title("资金流向分析")
+        self.window.title("资金分析 - 账户间资金流向统计")
         self.window.geometry("800x600")
         # 设置窗口始终置顶
         self.window.transient(self.master)
@@ -123,7 +127,7 @@ class FundFlowAnalysis:
         """显示字段映射对话框"""
         mapping_dialog = tk.Toplevel(self.window)
         mapping_dialog.title("字段映射")
-        mapping_dialog.geometry("600x600")
+        mapping_dialog.geometry("600x700")  # 增加高度以容纳去重选项
         # 设置模态对话框
         mapping_dialog.transient(self.window)
         mapping_dialog.grab_set()
@@ -152,6 +156,60 @@ class FundFlowAnalysis:
             
             mapping[req_col] = combo
         
+        # ======== 添加去重选项 ========
+        deduplicate_frame = ttk.LabelFrame(mapping_dialog, text="数据去重", padding="10")
+        deduplicate_frame.pack(fill=tk.X, pady=10, padx=10)
+        
+        # 是否去重单选按钮
+        deduplicate_option_frame = ttk.Frame(deduplicate_frame)
+        deduplicate_option_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(deduplicate_option_frame, text="是否去重:").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(
+            deduplicate_option_frame, 
+            text="否", 
+            variable=self.deduplicate_var, 
+            value="否"
+        ).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(
+            deduplicate_option_frame, 
+            text="是", 
+            variable=self.deduplicate_var, 
+            value="是"
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # 去重方法单选按钮（默认隐藏）
+        self.method_frame = ttk.Frame(deduplicate_frame)
+        self.method_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(self.method_frame, text="去重方法:").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(
+            self.method_frame, 
+            text="根据【流水号】去重", 
+            variable=self.deduplicate_method_var, 
+            value="根据【流水号】去重"
+        ).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(
+            self.method_frame, 
+            text="根据【两端账号+日期时间+借贷方向+交易金额】去重", 
+            variable=self.deduplicate_method_var, 
+            value="根据【两端账号+日期时间+借贷方向+交易金额】去重"
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # 初始状态：如果选择"否"，则隐藏方法选择
+        if self.deduplicate_var.get() == "否":
+            self.method_frame.pack_forget()
+        
+        # 绑定事件：当去重选择变化时显示/隐藏方法选择
+        def toggle_method_frame(*args):
+            if self.deduplicate_var.get() == "是":
+                self.method_frame.pack(fill=tk.X, pady=5)
+            else:
+                self.method_frame.pack_forget()
+        
+        self.deduplicate_var.trace_add("write", toggle_method_frame)
+        # ======== 结束去重选项 ========
+        
         def confirm_mapping():
             result = {}
             for k, v in mapping.items():
@@ -171,9 +229,42 @@ class FundFlowAnalysis:
         self.window.wait_window(mapping_dialog)
         return self.column_mapping
 
+    def apply_deduplication(self, df: pd.DataFrame) -> pd.DataFrame:
+        """根据用户选择应用去重逻辑"""
+        if self.deduplicate_var.get() == "否":
+            return df  # 不去重，直接返回原始数据
+        
+        # 关键优化：使用映射后的目标字段名进行去重
+        if self.deduplicate_method_var.get() == "根据【流水号】去重":
+            # 根据映射后的目标字段名去重
+            col_name = "支付机构内部订单号"
+            if col_name in df.columns:
+                df = df.drop_duplicates(subset=[col_name], keep='first')
+            else:
+                messagebox.showwarning("警告", f"找不到映射的列：{col_name}")
+        
+        else:  # 根据组合字段去重
+            # 使用映射后的目标字段名作为去重依据
+            cols_to_check = [
+                "付款方支付账号", 
+                "收款方支付账号", 
+                "交易时间", 
+                "借贷标志", 
+                "交易金额"
+            ]
+            
+            missing_cols = [col for col in cols_to_check if col not in df.columns]
+            
+            if missing_cols:
+                messagebox.showwarning("警告", f"找不到以下映射的列：{', '.join(missing_cols)}")
+            elif cols_to_check:
+                df = df.drop_duplicates(subset=cols_to_check, keep='first')
+        
+        return df
+
     def process_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """处理数据（对应SQL模型的逻辑）"""
-        # 重命名列
+        # 关键优化：首先应用字段映射
         if hasattr(self, 'column_mapping'):
             df = df.rename(columns={v: k for k, v in self.column_mapping.items() if v})
 
@@ -186,24 +277,24 @@ class FundFlowAnalysis:
         df_received = df[df['借贷标志'] == '贷'].copy()
         df_received = df_received.sort_values('交易日期时间', ascending=False)
         df_received_name = df_received.drop_duplicates(
-            subset=['收款方支付帐号', '收款方的商户名称'], keep='first'
-        )[['收款方支付帐号', '收款方的商户名称', '交易日期时间']]
+            subset=['收款方支付账号', '收款方的商户名称'], keep='first'
+        )[['收款方支付账号', '收款方的商户名称', '交易日期时间']]
         df_received_name = df_received_name.sort_values('交易日期时间', ascending=False)
-        df_received_name = df_received_name.drop_duplicates(subset=['收款方支付帐号'], keep='first')
+        df_received_name = df_received_name.drop_duplicates(subset=['收款方支付账号'], keep='first')
         df_received_name = df_received_name.rename(
-            columns={'收款方支付帐号': '账号', '收款方的商户名称': '系统姓名'}
+            columns={'收款方支付账号': '账号', '收款方的商户名称': '系统姓名'}
         )
 
         # 1.2 构建 df_system_account
         df_borrow = df[df['借贷标志'] == '借'].copy()
         df_borrow = df_borrow.sort_values('交易日期时间', ascending=False)
-        df_borrow_acc = df_borrow[['查询账号', '付款方支付帐号', '交易日期时间']]
-        df_borrow_acc = df_borrow_acc.rename(columns={'付款方支付帐号': '支付账号'})
+        df_borrow_acc = df_borrow[['查询账号', '付款方支付账号', '交易日期时间']]
+        df_borrow_acc = df_borrow_acc.rename(columns={'付款方支付账号': '支付账号'})
 
         df_credit = df[df['借贷标志'] == '贷'].copy()
         df_credit = df_credit.sort_values('交易日期时间', ascending=False)
-        df_credit_acc = df_credit[['查询账号', '收款方支付帐号', '交易日期时间']]
-        df_credit_acc = df_credit_acc.rename(columns={'收款方支付帐号': '支付账号'})
+        df_credit_acc = df_credit[['查询账号', '收款方支付账号', '交易日期时间']]
+        df_credit_acc = df_credit_acc.rename(columns={'收款方支付账号': '支付账号'})
 
         df_system_account = pd.concat([df_borrow_acc, df_credit_acc], ignore_index=True)
         # 只保留 查询账号 ≠ 支付账号 且 支付账号长度 > 3
@@ -236,63 +327,57 @@ class FundFlowAnalysis:
             
             # 2. 公司类型关键词
             company_keywords = [
-                '公司', '集团', '机构', '基金', '金服', '协会',
-                '商贸', '银行', '证券', '保险', '投资',
-                '企业', '工厂',  '中心',
-                '商城', '超市', '市场', '学校', '医院',
-                '酒店', '餐厅', '网络', '科技', '信息',
+                '公司', '集团', '机构', '基金', '金服', '协会', '商贸', '银行', 
+                '证券', '保险', '投资', '企业', '工厂', '中心', '商城', '超市', 
+                '市场', '学校', '医院', '酒店', '餐厅', '网络', '科技', '信息',
                 '有限', '股份', '合伙'
             ]
             
             # 3. 个人名称特征
             person_features = [
-    # 维吾尔族人名特征（约80个）
-    '买买提', '阿不都', '艾力', '麦麦提', '热依木', '吾买尔', '艾合买提', '依布拉音',
-    '阿布都', '阿迪力', '阿里木', '艾尔肯', '巴合提', '迪力夏提', '古力', '哈力克',
-    '艾克拜尔', '吾斯曼', '依米提', '玉素甫', '阿不力克', '阿不都拉', '阿不都热合曼',
-    '阿地力江', '阿合买提江', '阿克木', '艾克木', '艾力江', '艾买提', '艾沙江',
-    '艾斯卡尔', '巴哈尔', '巴哈提亚尔', '达吾提', '代力拜尔', '蒂力瓦尔', '地里夏提',
-    '东来提', '都拉提', '额勒斯', '额敏', '恩维尔', '喀德尔', '卡德尔', '卡斯木',
-    '凯赛尔', '库尔班', '库热西', '马合木提', '买合木提', '买买提江', '买提', '米吉提',
-    '努尔买买提', '努尔曼', '帕尔哈提', '热合曼', '热扎克', '赛迪克', '赛力克',
-    '司马义', '苏来曼', '苏联', '铁木尔', '托合提', '托乎提', '托合塔尔', '托克逊',
-    '外力', '维力', '乌买尔', '吾布力', '吾甫尔', '吾拉木', '西地克', '希尔艾力',
-    '肖开提', '亚库普', '亚森', '依布拉依木', '依德利斯', '依力亚斯', '依斯拉木',
-    '尤努斯', '玉山', '玉素甫江', '再努拉', '扎克尔', '珠马力',
-
-    # 藏族人名特征（约70个）
-    '次仁', '卓玛', '索朗', '格桑', '仁增', '旺堆', '平措', '白玛', '降央', '央金',
-    '次旺', '普布', '拉巴', '白珍', '其美', '达瓦', '泽仁', '曲珍', '群培', '顿珠',
-    '洛桑', '嘉央', '强巴', '才旺', '扎西', '江措', '德吉', '桑珠', '朗杰', '嘎玛',
-    '更登', '旺姆', '加央', '曲木', '达珍', '南杰', '尼玛', '旺青', '斯朗', '白让',
-    '丹增', '益西', '多吉', '旺金', '降措', '次基', '玉珍', '拉姆', '达甲', '昂旺',
-    '贡嘎', '措姆', '其米', '次珍', '索娜', '达吉', '才让', '白旦', '才顿', '占堆',
-    '央宗', '白德', '多布杰', '白玛措', '噶玛', '降措', '绒措', '桑布', '却吉', '索朗旺堆',
-
-    # 蒙古族人名特征（约60个）
-    '格日勒', '乌云', '呼和', '额尔德尼', '巴特尔', '苏和', '斯琴', '萨仁', '朝克图', '宝音',
-    '那顺', '道尔吉', '巴雅尔', '阿拉坦', '赛音', '满都拉', '图门', '图雅', '额日德尼', '乌兰',
-    '其其格', '齐日古嘎', '白音', '胡日查', '包银', '金巴图', '玛拉沁', '达来', '特木尔', '金花',
-    '锡林', '珠拉', '敖特根', '毕力格', '宝力高', '宝音吉雅', '布仁', '楚古拉', '达古拉', '达赖',
-    '额尔敦', '额日图', '格根', '根登', '和日勒', '贺希格', '吉尔格勒', '吉日嘎拉', '金格尔', '闵柱',
-    '那日苏', '纳森', '青格勒', '青格尔泰', '青斯格', '萨日娜', '色音', '苏布达', '苏和巴特尔', '苏勒',
-
-    # 回族人名特征（约50个）
-    '马哈木提', '穆罕默德', '阿訇', '艾买提', '麦麦提', '阿卜杜拉', '阿里', '哈桑', '侯赛因', '伊布拉欣',
-    '叶海亚', '赛义德', '阿巴斯', '阿卜杜', '阿卜杜勒', '阿迪力', '阿訇', '艾山', '艾伟', '安外尔',
-    '白有志', '拜勒', '本扬', '布尔汗', '察勒', '常志宁', '丁守中', '丁元庆', '丁志诚', '冯天保',
-    '哈里勒', '哈米德', '海德尔', '胡赛尼', '胡有志', '霍志远', '贾福尔', '贾拉勒', '贾迈勒', '贾曼',
-    '贾米勒', '卡德尔', '卡迪尔', '卡米力', '马合木', '马吉德', '马坚', '马建国', '马金山', '马俊',
-
-    # 其他少数民族特征（约50个）
-    '其其格', '阿依古丽', '玛依拉', '木合塔尔', '吐尔逊', '阿布都克热木', '卡米拉', '帕提曼',
-    '阿依努尔', '古丽娜尔', '米热古丽', '古力班', '热依汗', '热西旦', '赛乃姆', '沙代提',
-    '阿地力江', '吐尔洪', '阿布来提', '阿布都沙拉木', '玛依努尔', '木尔扎提', '努尔买买提',
-    '热合曼', '吐尔逊江', '阿卜杜拉曼', '阿布都热依木', '阿卜杜热合曼', '玛依努尔', '木尔扎提',
-    '努尔买买提', '热合曼', '吐尔逊江', '阿卜杜拉曼', '阿布都热依木', '阿卜杜热合曼', '阿布都外力',
-    '阿布都瓦依提', '阿布都热合曼', '艾力', '艾尼瓦尔', '艾斯卡尔', '安尼瓦尔', '巴合提亚尔',
-    '巴吾东', '达吾提', '迪力夏提', '东来提', '额勒斯', '恩维尔', '古力班', '哈力克'
-]
+                # 维吾尔族人名特征
+                '买买提', '阿不都', '艾力', '麦麦提', '热依木', '吾买尔', '艾合买提', '依布拉音',
+                '阿布都', '阿迪力', '阿里木', '艾尔肯', '巴合提', '迪力夏提', '古力', '哈力克',
+                '艾克拜尔', '吾斯曼', '依米提', '玉素甫', '阿不力克', '阿不都拉', '阿不都热合曼',
+                '阿地力江', '阿合买提江', '阿克木', '艾克木', '艾力江', '艾买提', '艾沙江',
+                '艾斯卡尔', '巴哈尔', '巴哈提亚尔', '达吾提', '代力拜尔', '蒂力瓦尔', '地里夏提',
+                '东来提', '都拉提', '额勒斯', '额敏', '恩维尔', '喀德尔', '卡德尔', '卡斯木',
+                '凯赛尔', '库尔班', '库热西', '马合木提', '买合木提', '买买提江', '买提', '米吉提',
+                '努尔买买提', '努尔曼', '帕尔哈提', '热合曼', '热扎克', '赛迪克', '赛力克',
+                '司马义', '苏来曼', '苏联', '铁木尔', '托合提', '托乎提', '托合塔尔', '托克逊',
+                '外力', '维力', '乌买尔', '吾布力', '吾甫尔', '吾拉木', '西地克', '希尔艾力',
+                '肖开提', '亚库普', '亚森', '依布拉依木', '依德利斯', '依力亚斯', '依斯拉木',
+                '尤努斯', '玉山', '玉素甫江', '再努拉', '扎克尔', '珠马力',
+                # 藏族人名特征
+                '次仁', '卓玛', '索朗', '格桑', '仁增', '旺堆', '平措', '白玛', '降央', '央金',
+                '次旺', '普布', '拉巴', '白珍', '其美', '达瓦', '泽仁', '曲珍', '群培', '顿珠',
+                '洛桑', '嘉央', '强巴', '才旺', '扎西', '江措', '德吉', '桑珠', '朗杰', '嘎玛',
+                '更登', '旺姆', '加央', '曲木', '达珍', '南杰', '尼玛', '旺青', '斯朗', '白让',
+                '丹增', '益西', '多吉', '旺金', '降措', '次基', '玉珍', '拉姆', '达甲', '昂旺',
+                '贡嘎', '措姆', '其米', '次珍', '索娜', '达吉', '才让', '白旦', '才顿', '占堆',
+                '央宗', '白德', '多布杰', '白玛措', '噶玛', '降措', '绒措', '桑布', '却吉', '索朗旺堆',
+                # 蒙古族人名特征
+                '格日勒', '乌云', '呼和', '额尔德尼', '巴特尔', '苏和', '斯琴', '萨仁', '朝克图', '宝音',
+                '那顺', '道尔吉', '巴雅尔', '阿拉坦', '赛音', '满都拉', '图门', '图雅', '额日德尼', '乌兰',
+                '其其格', '齐日古嘎', '白音', '胡日查', '包银', '金巴图', '玛拉沁', '达来', '特木尔', '金花',
+                '锡林', '珠拉', '敖特根', '毕力格', '宝力高', '宝音吉雅', '布仁', '楚古拉', '达古拉', '达赖',
+                '额尔敦', '额日图', '格根', '根登', '和日勒', '贺希格', '吉尔格勒', '吉日嘎拉', '金格尔', '闵柱',
+                '那日苏', '纳森', '青格勒', '青格尔泰', '青斯格', '萨日娜', '色音', '苏布达', '苏和巴特尔', '苏勒',
+                # 回族人名特征
+                '马哈木提', '穆罕默德', '阿訇', '艾买提', '麦麦提', '阿卜杜拉', '阿里', '哈桑', '侯赛因', '伊布拉欣',
+                '叶海亚', '赛义德', '阿巴斯', '阿卜杜', '阿卜杜勒', '阿迪力', '阿訇', '艾山', '艾伟', '安外尔',
+                '白有志', '拜勒', '本扬', '布尔汗', '察勒', '常志宁', '丁守中', '丁元庆', '丁志诚', '冯天保',
+                '哈里勒', '哈米德', '海德尔', '胡赛尼', '胡有志', '霍志远', '贾福尔', '贾拉勒', '贾迈勒', '贾曼',
+                '贾米勒', '卡德尔', '卡迪尔', '卡米力', '马合木', '马吉德', '马坚', '马建国', '马金山', '马俊',
+                # 其他少数民族特征
+                '其其格', '阿依古丽', '玛依拉', '木合塔尔', '吐尔逊', '阿布都克热木', '卡米拉', '帕提曼',
+                '阿依努尔', '古丽娜尔', '米热古丽', '古力班', '热依汗', '热西旦', '赛乃姆', '沙代提',
+                '阿地力江', '吐尔洪', '阿布来提', '阿布都沙拉木', '玛依努尔', '木尔扎提', '努尔买买提',
+                '热合曼', '吐尔逊江', '阿卜杜拉曼', '阿布都热依木', '阿卜杜热合曼', '玛依努尔', '木尔扎提',
+                '努尔买买提', '热合曼', '吐尔逊江', '阿卜杜拉曼', '阿布都热依木', '阿卜杜热合曼', '阿布都外力',
+                '阿布都瓦依提', '阿布都热合曼', '艾力', '艾尼瓦尔', '艾斯卡尔', '安尼瓦尔', '巴合提亚尔',
+                '巴吾东', '达吾提', '迪力夏提', '东来提', '额勒斯', '恩维尔', '古力班', '哈力克'
+            ]
             
             # 判断逻辑:
             # 1. 如果包含公司关键词且长度>10，判定为公司
@@ -352,7 +437,7 @@ class FundFlowAnalysis:
             })
 
         # 4. 生成最终结果
-        result = df.groupby(['付款方支付帐号', '收款方支付帐号']).apply(calculate_group_stats).reset_index()
+        result = df.groupby(['付款方支付账号', '收款方支付账号']).apply(calculate_group_stats).reset_index()
         result.columns = [
             '用户id', '交易对手',  '交易笔数', '收入笔数', '支出笔数',
             '进出类型', '流水总额', '净流入金额', '最早交易时间', '最新交易时间',
@@ -360,6 +445,8 @@ class FundFlowAnalysis:
             '平均单笔支出金额', '最大单笔收入金额', '最大单笔支出金额',
             '交易备注', '关联交易详情'
         ]
+        
+
 
         # 5. 根据 df_received_name 匹配系统姓名和对手系统姓名
         result = result.merge(
@@ -390,7 +477,11 @@ class FundFlowAnalysis:
             left_on='交易对手',
             right_on='支付账号'
         ).drop(columns=['支付账号'])
-
+        
+        # 过滤掉没有调证账号的记录
+        result = result[result['调证账号'].notna()]
+        result = result[result['调证账号'] != 'nan']
+        
         # 字段类型强制为文本
         for col in ['用户id', '调证账号', '交易对手', '对手账号']:
             result[col] = result[col].astype(str)
@@ -447,6 +538,11 @@ class FundFlowAnalysis:
                         if not hasattr(self, 'column_mapping'):
                             self.column_mapping = self.show_mapping_dialog(df.columns.tolist())
                         
+                        # 应用字段映射（重命名列）
+                        if hasattr(self, 'column_mapping'):
+                            rename_dict = {v: k for k, v in self.column_mapping.items() if v}
+                            df = df.rename(columns=rename_dict)
+                        
                         all_data.append(df)
                     
                     self.progress_var.set((i + 1) / total_files * 50)
@@ -454,6 +550,10 @@ class FundFlowAnalysis:
                 # 合并数据
                 self.status_label.config(text="正在合并数据...")
                 combined_df = pd.concat(all_data, ignore_index=True)
+                
+                # 应用去重逻辑（使用映射后的目标字段名）
+                self.status_label.config(text="正在应用去重逻辑...")
+                combined_df = self.apply_deduplication(combined_df)
                 
                 # 处理数据
                 self.status_label.config(text="正在处理数据...")
